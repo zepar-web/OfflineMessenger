@@ -7,15 +7,27 @@
 #include <stdio.h>
 #include <arpa/inet.h>
 #include <string.h>
-//prima modificare test
-
-/* portul folosit */
 
 #define PORT 3059
+extern int errno;
 
-extern int errno; /* eroarea returnata de unele apeluri */
+void socketMaker(int sd)
+{
+    if ((sd = socket(AF_INET, SOCK_STREAM, 0)) == -1)
+        perror("Eroare socket!\n");
+}
 
-/* functie de convertire a adresei IP a clientului in sir de caractere */
+void serverConnection(int sd, struct sockaddr_in server)
+{
+    if (connect(sd, (struct sockaddr *)&server, sizeof(struct sockaddr)) == -1)
+        perror("Eroare connect[client]");
+}
+
+void socketBind(int sd, struct sockaddr_in server)
+{
+    if (bind(sd, (struct sockaddr *)&server, sizeof(struct sockaddr)) == -1)
+        perror("eroare bind[server]\n");
+}
 char *conv_addr(struct sockaddr_in address)
 {
     static char str[25];
@@ -30,150 +42,85 @@ char *conv_addr(struct sockaddr_in address)
     return (str);
 }
 
-/* programul */
 int main()
 {
-    struct sockaddr_in server; /* structurile pentru server si clienti */
+    struct sockaddr_in server;
     struct sockaddr_in from;
-    fd_set readfds;    /* multimea descriptorilor de citire */
-    fd_set actfds;     /* multimea descriptorilor activi */
-    struct timeval tv; /* structura de timp pentru select() */
-    int sd, client;    /* descriptori de socket */
-    int optval = 1;    /* optiune folosita pentru setsockopt()*/
-    int fd;            /* descriptor folosit pentru
-                      parcurgerea listelor de descriptori */
-    int nfds;          /* numarul maxim de descriptori */
-    int len;           /* lungimea structurii sockaddr_in */
 
-    /* creare socket */
-    if ((sd = socket(AF_INET, SOCK_STREAM, 0)) == -1)
-    {
-        perror("[server] Eroare la socket().\n");
-        return errno;
-    }
+    fd_set readDesc;
+    fd_set activDesc;
 
-    /*setam pentru socket optiunea SO_REUSEADDR */
-    setsockopt(sd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval));
+    struct timeval tmp;
 
-    /* pregatim structurile de date */
+    int socketDesc, client;
+    int optTmp = 1;
+
+    int parcDesc, maxDesc, length;
+
+    socketMaker(socketDesc);
+
+    setsockopt(socketDesc, SOL_SOCKET, SO_REUSEADDR, &optTmp, sizeof(optTmp));
+
     bzero(&server, sizeof(server));
 
-    /* umplem structura folosita de server */
     server.sin_family = AF_INET;
     server.sin_addr.s_addr = htonl(INADDR_ANY);
     server.sin_port = htons(PORT);
 
-    /* atasam socketul */
-    if (bind(sd, (struct sockaddr *)&server, sizeof(struct sockaddr)) == -1)
-    {
-        perror("[server] Eroare la bind().\n");
-        return errno;
-    }
+    socketBind(socketDesc, server);
 
-    /* punem serverul sa asculte daca vin clienti sa se conecteze */
-    if (listen(sd, 5) == -1)
-    {
-        perror("[server] Eroare la listen().\n");
-        return errno;
-    }
+    if (listen(socketDesc, 5) == -1)
+        perror("eroare listen[parent]");
 
-    /* completam multimea de descriptori de citire */
-    FD_ZERO(&actfds);    /* initial, multimea este vida */
-    FD_SET(sd, &actfds); /* includem in multime socketul creat */
+    FD_ZERO(&activDesc);
+    FD_SET(socketDesc, &activDesc);
 
-    tv.tv_sec = 1; /* se va astepta un timp de 1 sec. */
-    tv.tv_usec = 0;
+    tmp.tv_sec = 1;
+    tmp.tv_usec = 0;
 
-    /* valoarea maxima a descriptorilor folositi */
-    nfds = sd;
+    maxDesc = socketDesc;
 
-    printf("[server] Asteptam la portul %d...\n", PORT);
+    printf("[server]Waiting at : %d\n", PORT);
     fflush(stdout);
 
-    /* servim in mod concurent clientii... */
+    char buffer[100];
+    int bytes;
     while (1)
     {
-        /* ajustam multimea descriptorilor activi (efectiv utilizati) */
-        bcopy((char *)&actfds, (char *)&readfds, sizeof(readfds));
+        bcopy((char *)&activDesc, (char *)&readDesc, sizeof(readDesc));
 
-        /* apelul select() */
-        if (select(nfds + 1, &readfds, NULL, NULL, &tv) < 0)
+        if (select(maxDesc + 1, &readDesc, NULL, NULL, &tmp) < 0)
+            perror("[server]eroare select");
+
+        if (FD_ISSET(socketDesc, &readDesc))
         {
-            perror("[server] Eroare la select().\n");
-            return errno;
-        }
-        /* vedem daca e pregatit socketul pentru a-i accepta pe clienti */
-        if (FD_ISSET(sd, &readfds))
-        {
-            /* pregatirea structurii client */
-            len = sizeof(from);
+            length = sizeof(from);
             bzero(&from, sizeof(from));
 
-            /* a venit un client, acceptam conexiunea */
-            client = accept(sd, (struct sockaddr *)&from, &len);
+            client = accept(socketDesc, (struct sockadder*)&from,&length);
 
-            /* eroare la acceptarea conexiunii de la un client */
-            if (client < 0)
-            {
-                perror("[server] Eroare la accept().\n");
-                continue;
-            }
+            if(client<0)
+                perror("[server]eroare accept");
 
-            if (nfds < client) /* ajusteaza valoarea maximului */
-                nfds = client;
+            if(maxDesc<client)
+                maxDesc=client;
 
-            /* includem in lista de descriptori activi si acest socket */
-            FD_SET(client, &actfds);
+            FD_SET(client,&activDesc);
 
-            printf("[server] S-a conectat clientul cu descriptorul %d, de la adresa %s.\n", client, conv_addr(from));
+            printf("[server]%s s-a conectat.",conv_addr(from));
             fflush(stdout);
         }
-        /* vedem daca e pregatit vreun socket client pentru a trimite raspunsul */
-        for (fd = 0; fd <= nfds; fd++) /* parcurgem multimea de descriptori */
+        for(parcDesc=0;parcDesc<=maxDesc;parcDesc++)
         {
-            /* este un socket de citire pregatit? */
-            if (fd != sd && FD_ISSET(fd, &readfds))
+            if(parcDesc!=socketDesc && FD_ISSET(parcDesc,&readDesc))
             {
-                if (sayHello(fd))
+                bytes=read(parcDesc,buffer,sizeof(buffer));
+
+                if(strcmp(buffer,"login")==0)
                 {
-                    printf("[server] S-a deconectat clientul cu descriptorul %d.\n", fd);
-                    fflush(stdout);
-                    close(fd);           /* inchidem conexiunea cu clientul */
-                    FD_CLR(fd, &actfds); /* scoatem si din multime */
+                    write(parcDesc,"connected",strlen("connected"));
                 }
             }
-        } /* for */
-    }     /* while */
-} /* main */
-
-/* realizeaza primirea si retrimiterea unui mesaj unui client */
-int sayHello(int fd)
-{
-    char buffer[100];        /* mesajul */
-    int bytes;               /* numarul de octeti cititi/scrisi */
-    char msg[100];           // mesajul primit de la client
-    char msgrasp[100] = " "; // mesaj de raspuns pentru client
-
-    bytes = read(fd, msg, sizeof(buffer));
-    if (bytes < 0)
-    {
-        perror("Eroare la read() de la client.\n");
-        return 0;
+        }
     }
-    printf("[server]Mesajul a fost receptionat...%s\n", msg);
-
-    /*pregatim mesajul de raspuns */
-    bzero(msgrasp, 100);
-    strcat(msgrasp, "Hello ");
-    strcat(msgrasp, msg);
-
-    printf("[server]Trimitem mesajul inapoi...%s\n", msgrasp);
-
-    if (bytes && write(fd, msgrasp, bytes) < 0)
-    {
-        perror("[server] Eroare la write() catre client.\n");
-        return 0;
-    }
-
-    return bytes;
 }
