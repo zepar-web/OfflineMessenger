@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <netdb.h>
 #include <string.h>
+//prima modificare test
 
 /* codul de eroare returnat de anumite apeluri */
 extern int errno;
