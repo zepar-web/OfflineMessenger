@@ -7,120 +7,122 @@
 #include <stdio.h>
 #include <arpa/inet.h>
 #include <string.h>
+#include <pthread.h>
+#include <stdlib.h>
 
 #define PORT 3059
+#define MAXBUFFER 100
+
 extern int errno;
 
-void socketMaker(int sd)
+typedef struct thData
 {
-    if ((sd = socket(AF_INET, SOCK_STREAM, 0)) == -1)
-        perror("Eroare socket!\n");
-}
+    int idTh;
+    int thDesc;
+} thData;
 
-void serverConnection(int sd, struct sockaddr_in server)
-{
-    if (connect(sd, (struct sockaddr *)&server, sizeof(struct sockaddr)) == -1)
-        perror("Eroare connect[client]");
-}
+static void *treat(void *);
 
-void socketBind(int sd, struct sockaddr_in server)
-{
-    if (bind(sd, (struct sockaddr *)&server, sizeof(struct sockaddr)) == -1)
-        perror("eroare bind[server]\n");
-}
-char *conv_addr(struct sockaddr_in address)
-{
-    static char str[25];
-    char port[7];
-
-    /* adresa IP a clientului */
-    strcpy(str, inet_ntoa(address.sin_addr));
-    /* portul utilizat de client */
-    bzero(port, 7);
-    sprintf(port, ":%d", ntohs(address.sin_port));
-    strcat(str, port);
-    return (str);
-}
+void response(void *);
 
 int main()
 {
     struct sockaddr_in server;
-    struct sockaddr_in from;
+    struct sockaddr_in client2server;
+    int socketDesc;
+    pthread_t th[100];
 
-    fd_set readDesc;
-    fd_set activDesc;
+    if ((socketDesc = socket(AF_INET, SOCK_STREAM, 0)) == -1)
+    {
+        perror("Eroare socket\n");
 
-    struct timeval tmp;
+        return errno;
+    }
 
-    int socketDesc, client;
-    int optTmp = 1;
-
-    int parcDesc, maxDesc, length;
-
-    socketMaker(socketDesc);
-
-    setsockopt(socketDesc, SOL_SOCKET, SO_REUSEADDR, &optTmp, sizeof(optTmp));
+    int sockopt = 1;
+    setsockopt(socketDesc, SOL_SOCKET, SO_REUSEADDR, &sockopt, sizeof(sockopt));
 
     bzero(&server, sizeof(server));
+    bzero(&client2server, sizeof(client2server));
 
     server.sin_family = AF_INET;
     server.sin_addr.s_addr = htonl(INADDR_ANY);
     server.sin_port = htons(PORT);
 
-    socketBind(socketDesc, server);
+    if (bind(socketDesc, (struct sockaddr *)&server, sizeof(struct sockaddr)) == -1)
+    {
+        perror("Eroare bind\n");
 
-    if (listen(socketDesc, 5) == -1)
-        perror("eroare listen[parent]");
+        return errno;
+    }
 
-    FD_ZERO(&activDesc);
-    FD_SET(socketDesc, &activDesc);
+    if (listen(socketDesc, 100) == -1)
+    {
+        perror("Eroare listen\n");
 
-    tmp.tv_sec = 1;
-    tmp.tv_usec = 0;
+        return errno;
+    }
 
-    maxDesc = socketDesc;
+    int i = 0;
 
-    printf("[server]Waiting at : %d\n", PORT);
-    fflush(stdout);
-
-    char buffer[100];
-    int bytes;
+    printf("Asteptam la portul %d..\n", PORT);
     while (1)
     {
-        bcopy((char *)&activDesc, (char *)&readDesc, sizeof(readDesc));
+        int client;
+        thData *th;
+        int len = sizeof(client2server);
 
-        if (select(maxDesc + 1, &readDesc, NULL, NULL, &tmp) < 0)
-            perror("[server]eroare select");
-
-        if (FD_ISSET(socketDesc, &readDesc))
+        if ((client = accept(socketDesc, (struct sockaddr *)&client2server, &len)) < 0)
         {
-            length = sizeof(from);
-            bzero(&from, sizeof(from));
-
-            client = accept(socketDesc, (struct sockadder*)&from,&length);
-
-            if(client<0)
-                perror("[server]eroare accept");
-
-            if(maxDesc<client)
-                maxDesc=client;
-
-            FD_SET(client,&activDesc);
-
-            printf("[server]%s s-a conectat.",conv_addr(from));
-            fflush(stdout);
+            perror("Eroare accept\n");
+            continue;
         }
-        for(parcDesc=0;parcDesc<=maxDesc;parcDesc++)
-        {
-            if(parcDesc!=socketDesc && FD_ISSET(parcDesc,&readDesc))
-            {
-                bytes=read(parcDesc,buffer,sizeof(buffer));
 
-                if(strcmp(buffer,"login")==0)
-                {
-                    write(parcDesc,"connected",strlen("connected"));
-                }
-            }
-        }
+        th = (struct thData *)malloc(sizeof(struct thData));
+        th->idTh = i++;
+        th->thDesc = client;
+
+        pthread_create(&th[i], NULL, &treat, th);
+    }
+}
+
+static void *treat(void *arg)
+{
+    struct thData tdL;
+    tdL = *((struct thData *)arg);
+
+    printf("[thread]- %d - Asteptam mesajul...\n", tdL.idTh);
+
+    pthread_detach(pthread_self());
+
+    response((struct thData *)arg);
+
+    close((intptr_t)arg);
+    return (NULL);
+}
+
+void response(void *arg)
+{
+    struct thData tdL;
+    tdL = *((struct thData *)arg);
+
+    char buffer[MAXBUFFER];
+    int count = 0;
+    if (read(tdL.thDesc, &buffer, sizeof(buffer)) <= 0)
+    {
+        printf("[TH %d]\n", tdL.idTh);
+        perror("Eroare la read()\n");
+    }
+    buffer[strlen(buffer)]='\0';
+    printf("[Th id: %d] Mesaj de la comandant : %s\n", tdL.idTh, buffer);
+
+    if (write(tdL.thDesc, "te salut", strlen("te salut")) <= 0)
+    {
+        printf("[TH %d]\n", tdL.idTh);
+        perror("Eroare la write()\n");
+    }
+    else
+    {
+        printf("Mesaj trimis cu succes comandante, te pup si te respect!\n");
     }
 }
