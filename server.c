@@ -9,8 +9,9 @@
 #include <string.h>
 #include <pthread.h>
 #include <stdlib.h>
+#include <mysql/mysql.h>
 
-#define PORT 3059
+#define PORT 3058
 #define MAXBUFFER 100
 
 extern int errno;
@@ -100,7 +101,43 @@ static void *treat(void *arg)
     close((intptr_t)arg);
     return (NULL);
 }
-//to do register
+// To do
+void Register(int desc, thData th)
+{
+    MYSQL *conn = mysql_init(NULL);
+    MYSQL_RES *res;
+    MYSQL_ROW row;
+
+    if (conn == NULL)
+    {
+        fprintf(stderr, "%s\n", mysql_error(conn));
+        exit(1);
+    }
+
+    if (!mysql_real_connect(conn, "localhost", "root", "passwd", "offmess", 0, NULL, 0))
+    {
+        fprintf(stderr,"%s\n",mysql_error(conn));
+        exit(2);
+    }
+
+    if(mysql_query(conn,"show tables"))
+    {
+        fprintf(stderr,"%s\n",mysql_error(conn));
+        exit(3);
+    }
+
+    printf("Users are:\n");
+
+    while((row=mysql_fetch_row(res))!=NULL)
+    {
+        printf("%s\n",row[0]);
+    }
+
+    mysql_free_result(res);
+    mysql_close(conn);
+
+}
+
 void response(void *arg)
 {
     struct thData tdL;
@@ -113,8 +150,13 @@ void response(void *arg)
         printf("[TH %d]\n", tdL.idTh);
         perror("Eroare la read()\n");
     }
-    buffer[strlen(buffer)]='\0';
+    buffer[strlen(buffer)] = '\0';
     printf("[Th id: %d] Mesaj de la comandant : %s\n", tdL.idTh, buffer);
+
+    if(strcmp(buffer,"register")==0)
+    {
+        Register(tdL.thDesc,tdL);
+    }
 
     if (write(tdL.thDesc, "te salut", strlen("te salut")) <= 0)
     {
