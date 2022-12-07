@@ -100,7 +100,7 @@ static void *treat(void *arg)
     close((intptr_t)arg);
     return (NULL);
 }
-
+//to do register
 void response(void *arg)
 {
     struct thData tdL;
