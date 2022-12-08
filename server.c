@@ -10,8 +10,8 @@
 #include <pthread.h>
 #include <stdlib.h>
 #include <mysql/mysql.h>
-
-#define PORT 3058
+// gcc -Wall server.c -o server `mysql_config --cflags --libs'
+#define PORT 3076
 #define MAXBUFFER 100
 
 extern int errno;
@@ -20,6 +20,7 @@ typedef struct thData
 {
     int idTh;
     int thDesc;
+    int idUser;
 } thData;
 
 static void *treat(void *);
@@ -104,9 +105,10 @@ static void *treat(void *arg)
 // To do
 void Register(int desc, thData th)
 {
+    printf("Am intrat in register\n");
     MYSQL *conn = mysql_init(NULL);
-    MYSQL_RES *res;
-    MYSQL_ROW row;
+    //MYSQL_RES *res;
+    //MYSQL_ROW row;
 
     if (conn == NULL)
     {
@@ -116,49 +118,130 @@ void Register(int desc, thData th)
 
     if (!mysql_real_connect(conn, "localhost", "root", "passwd", "offmess", 0, NULL, 0))
     {
-        fprintf(stderr,"%s\n",mysql_error(conn));
+        fprintf(stderr, "%s\n", mysql_error(conn));
         exit(2);
     }
 
-    if(mysql_query(conn,"show tables"))
+    char query[256];
+    char username[100];
+    char password[100];
+    char *answer = (char *)malloc(50 * sizeof(char));
+
+    read(desc, &username, sizeof(username));
+    read(desc, &password, sizeof(password));
+    printf("%s\n", username);
+    printf("%s\n", password);
+
+    if (verifyUser(username) == 0)
     {
-        fprintf(stderr,"%s\n",mysql_error(conn));
-        exit(3);
+        sprintf(query, "INSERT INTO users (name, password) VALUES ('%s','%s')", username, password);
+
+        if (mysql_query(conn, query) != 0)
+        {
+            fprintf(stderr, "%s\n", mysql_error(conn));
+            exit(3);
+        }
+        else
+        {
+            strcpy(answer, "Te-ai inregistrat cu succes\n");
+            mysql_close(conn);
+        }
+        if (write(desc, answer, strlen(answer)) <= 0)
+        {
+            printf("Eroare write register\n");
+        }
+    }
+    else
+    {
+        write(desc, "Exista deja un utilizator cu acest nume!\n", 42);
     }
 
-    printf("Users are:\n");
-
-    while((row=mysql_fetch_row(res))!=NULL)
-    {
-        printf("%s\n",row[0]);
-    }
-
-    mysql_free_result(res);
-    mysql_close(conn);
-
+    fflush(stdin);
+    fflush(stdout);
 }
 
+int verifyUser(char *name)
+{
+    MYSQL *conn = mysql_init(NULL);
+
+    if (conn == NULL)
+    {
+        fprintf(stderr, "%s\n", mysql_error(conn));
+        exit(1);
+    }
+
+    if (!mysql_real_connect(conn, "localhost", "root", "passwd", "offmess", 0, NULL, 0))
+    {
+        fprintf(stderr, "%s\n", mysql_error(conn));
+        exit(2);
+    }
+
+    char query[256];
+    sprintf(query, "SELECT * FROM users WHERE name = '%s'", name);
+
+    if (mysql_query(conn, query))
+    {
+        fprintf(stderr, "%s\n", mysql_error(conn));
+
+        return 1;
+    }
+
+    MYSQL_RES *result = mysql_store_result(conn);
+
+    if (mysql_num_rows(result) > 0)
+    {
+        // name exist
+        return 1;
+    }
+    else
+    {
+        // name does not exist
+        return 0;
+    }
+
+    mysql_free_result(result);
+    mysql_close(conn);
+
+    return 0;
+}
+// TO DO $$ login $$ ------------------------------------------
+void Login(int desc, thData th)
+{
+    write(desc, "Te-ai logat cu succes\n", 22);
+}
+//----------------------------------------------------
 void response(void *arg)
 {
     struct thData tdL;
     tdL = *((struct thData *)arg);
 
     char buffer[MAXBUFFER];
-    int count = 0;
-    if (read(tdL.thDesc, &buffer, sizeof(buffer)) <= 0)
+    // int count = 0;
+    while (1)
     {
-        printf("[TH %d]\n", tdL.idTh);
-        perror("Eroare la read()\n");
-    }
-    buffer[strlen(buffer)] = '\0';
-    printf("[Th id: %d] Mesaj de la comandant : %s\n", tdL.idTh, buffer);
+        if (read(tdL.thDesc, &buffer, sizeof(buffer)) <= 0)
+        {
+            printf("[TH %d]\n", tdL.idTh);
+            perror("Eroare la read()\n");
+        }
+        buffer[strlen(buffer)] = '\0';
+        printf("[Th id: %d] Mesaj de la comandant : %s\n", tdL.idTh, buffer);
 
-    if(strcmp(buffer,"register")==0)
-    {
-        Register(tdL.thDesc,tdL);
+        if (strcmp(buffer, "register") == 0)
+        {
+            Register(tdL.thDesc, tdL);
+        }
+        else if (strcmp(buffer, "login") == 0)
+        {
+            Login(tdL.thDesc, tdL);
+        }else if(strstr(buffer,"quit"))
+        {
+            printf("O sa murim\n");
+        }
+        bzero(buffer,sizeof(buffer));
     }
 
-    if (write(tdL.thDesc, "te salut", strlen("te salut")) <= 0)
+    /*if (write(tdL.thDesc, "te salut", strlen("te salut")) <= 0)
     {
         printf("[TH %d]\n", tdL.idTh);
         perror("Eroare la write()\n");
@@ -166,5 +249,5 @@ void response(void *arg)
     else
     {
         printf("Mesaj trimis cu succes comandante, te pup si te respect!\n");
-    }
+    }*/
 }
