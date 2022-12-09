@@ -8,7 +8,7 @@
 #include <netdb.h>
 #include <string.h>
 #include <arpa/inet.h>
-//gcc -Wall client.c -o client
+// gcc -Wall client.c -o client
 extern int errno;
 int port;
 #define MAX 100
@@ -41,44 +41,52 @@ int main(int argc, char *argv[])
         return errno;
     }
 
-    char buffer[MAX];
     char command[MAX];
+    char buffer[MAX];
 
     printf("Welcome to my Messenger\n");
     while (1)
     {
         fflush(stdin);
         fflush(stdout);
-        bzero(command,strlen(command));
-        scanf("%s",command);
+        bzero(command, strlen(command));
+        scanf("%s", command);
 
         write(socketDesc, command, strlen(command));
 
-        if(strcmp(command,"register")==0 || strcmp(command,"login")==0)
+        if (strcmp(command, "register") == 0 || strcmp(command, "login") == 0)
         {
-            printf("Username:\n");
             char username[100];
-            scanf("%s",username);
+            char password[100];
+
+            printf("Username:\n");
+            scanf("%s", username);
 
             printf("Password:\n");
-            char password[100];
-            scanf("%s",password);
+            scanf("%s", password);
 
-            write(socketDesc,username,strlen(username));
-            write(socketDesc,password,strlen(password));
+            write(socketDesc, username, strlen(username));
+            write(socketDesc, password, strlen(password));
 
-            bzero(buffer,sizeof(buffer));
-            bzero(username,strlen(username));
-            bzero(password,strlen(password));
+            bzero(buffer, sizeof(buffer));
+            // bzero(username, strlen(username));
+            // bzero(password, strlen(password));
 
-            read(socketDesc,&buffer,sizeof(buffer));
+            // int msgReceived = 0;
+            read(socketDesc, &buffer, sizeof(buffer));
+            // buffer[msgReceived]='\0';
 
-            printf("%s",buffer);
-
-        }else if(strstr(command,"quit")){
-            //break;
-            printf("O sa murim!\n");
-        }else{
+            printf("%s\n", buffer);
+            fflush(stdout);
+        }
+        else if (strstr(command, "quit"))
+        {
+            // break;
+            // printf("O sa murim!\n");
+            exit(EXIT_SUCCESS);
+        }
+        else
+        {
             printf("Nu esti logat.\n");
             printf("Daca nu ai cont, foloseste comanda: register\n");
         }
