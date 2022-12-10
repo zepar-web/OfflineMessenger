@@ -10,7 +10,7 @@
 #include <pthread.h>
 #include <stdlib.h>
 #include <mysql/mysql.h>
-#define PORT 2089
+#define PORT 2189
 #define MAXBUFFER 100
 #define MYSQL_HOST "localhost"
 #define MYSQL_USER "root"
@@ -19,7 +19,7 @@
 // gcc -Wall server.c -o server `mysql_config --cflags --libs'
 //`mysql_config --cflags --libs'
 
-//gcc -o server server.c $(mysql_config --cflags --libs)
+// gcc -o server server.c $(mysql_config --cflags --libs)
 
 extern int errno;
 
@@ -82,7 +82,7 @@ int main()
     {
         int client;
         thData *td;
-        int len = sizeof(client2server);
+        socklen_t len = sizeof(client2server);
 
         if ((client = accept(socketDesc, (struct sockaddr *)&client2server, &len)) < 0)
         {
@@ -163,14 +163,15 @@ int verifyUser(char name[50])
 
 int Login(int desc, thData th)
 {
-    //write(desc, "Te-ai logat cu succes\n", 22);
+    // write(desc, "Te-ai logat cu succes\n", 22);
     printf("Am intrat in LOGIN!\n");
+    fflush(stdout);
 
-    MYSQL *conn;
-    MYSQL *result;
-    MYSQL_ROW row;
+    MYSQL *conn = mysql_init(NULL);
+    // MYSQL *result;
+    // MYSQL_ROW row;
 
-    if (conn = NULL)
+    if (conn == NULL)
     {
         fprintf(stderr, "%s\n", mysql_error(conn));
         exit(1);
@@ -195,13 +196,14 @@ int Login(int desc, thData th)
     fflush(stdout);
 
     read(desc, &username, sizeof(username));
-    printf("Name : %s\n", username);
     read(desc, &password, sizeof(password));
+    printf("Name : %s\n", username);
     printf("Password : %s\n", password);
+    fflush(stdout);
 
-    if (verifyUser(username))
+    if (verifyUser(username) == 1)
     {
-        sprintf(query, "SELECT id FROM users WHERE name='%s' and password='%s'", username, password);
+        sprintf(query, "SELECT id FROM users WHERE name='%s' AND password='%s'", username, password);
 
         if (mysql_query(conn, query))
         {
@@ -210,28 +212,53 @@ int Login(int desc, thData th)
             return -1;
         }
 
-        result = mysql_store_result(conn);
+        MYSQL_RES *result = mysql_store_result(conn);
 
-        if ((row = mysql_fetch_row(result)) != NULL)
+        if (result == NULL)
         {
-            userId = atoi(row[0]);
-            clients[th.idTh]->idUser = userId;
-
-            write(desc, "Te-ai logat cu succes!", 23);
+            printf("Eroare login!\n");
+            return -1;
         }
 
-        mysql_free_result(result);
+        MYSQL_ROW row = mysql_fetch_row(result);
 
+        if (row == NULL)
+        {
+            return -1;
+        }
+
+        userId = atoi(row[0]);
+        //clients[th.idTh]->idUser = userId;
+
+        mysql_free_result(result);
         mysql_close(conn);
 
         return userId;
+
+        // if (!(row = mysql_fetch_row(result)))
+        // {
+        //     return -1;
+        // }
+        // else
+        // {
+        //     userId = atoi(row[0]);
+        //     clients[th.idTh]->idUser = userId;
+
+        //     // write(desc, "Te-ai logat cu succes!", 23);
+        //     mysql_free_result(result);
+
+        //     mysql_close(conn);
+
+        //     return userId;
+        // }
     }
     else
     {
-        write(desc, "Nume/parola gresit.\n", 21);
-
+        // write(desc, "Nume/parola gresit.\n", 21);
         return -1;
     }
+
+    mysql_close(conn);
 
     return -1;
 }
@@ -249,23 +276,23 @@ void Register(int desc, thData th)
     char username[100];
     char password[100];
     char *answer = (char *)malloc(50 * sizeof(char));
-    //int userLen = 0;
-    //int passLen = 0;
+    // int userLen = 0;
+    // int passLen = 0;
 
     // bzero(username, sizeof(username));
     // bzero(password, sizeof(password));
     // bzero(answer, sizeof(answer));
 
-    if(read(desc, &username, sizeof(username)) < 0)
+    if (read(desc, &username, sizeof(username)) < 0)
     {
         perror("Eroare read username\n");
     }
-    if(read(desc, &password, sizeof(password))<0)
+    if (read(desc, &password, sizeof(password)) < 0)
     {
         perror("Eroare read password\n");
     }
-    //username[userLen]='\0';
-    //password[passLen]='\0';
+    // username[userLen]='\0';
+    // password[passLen]='\0';
     printf("Name: %s\n", username);
     printf("Password: %s\n", password);
     fflush(stdout);
@@ -300,7 +327,7 @@ void Register(int desc, thData th)
     }
     else
     {
-        strcpy(answer,"Exista deja un utilizator cu acest nume!\n");
+        strcpy(answer, "Exista deja un utilizator cu acest nume!\n");
         mysql_close(conn);
     }
     write(desc, answer, strlen(answer));
@@ -312,9 +339,12 @@ void response(void *arg)
     tdL = *((struct thData *)arg);
 
     char buffer[MAXBUFFER];
+    int loginFlag;
     // int count = 0;
     while (1)
     {
+        //bzero(buffer,sizeof(buffer));
+
         if (read(tdL.thDesc, &buffer, sizeof(buffer)) <= 0)
         {
             printf("[TH %d]\n", tdL.idTh);
@@ -322,6 +352,7 @@ void response(void *arg)
         }
         buffer[strlen(buffer)] = '\0';
         printf("[Th id: %d] Mesaj de la comandant : %s\n", tdL.idTh, buffer);
+        fflush(stdout);
 
         if (strcmp(buffer, "register") == 0)
         {
@@ -329,13 +360,24 @@ void response(void *arg)
         }
         else if (strcmp(buffer, "login") == 0)
         {
-            tdL.idUser = Login(tdL.thDesc, tdL);
+            loginFlag = Login(tdL.thDesc, tdL);
+            if (loginFlag == -1)
+            {
+                tdL.idUser = loginFlag;
+                clients[tdL.idTh]->idUser = loginFlag;
+                write(tdL.thDesc, "Te-ai connectat cu succes!\n", 28);
+            }
+            else
+            {
+                write(tdL.thDesc, "Nume/parola gresit.\n", 21);
+            }
         }
         else if (strstr(buffer, "quit"))
         {
             printf("O sa murim\n");
             exit(EXIT_SUCCESS);
         }
+
         bzero(buffer, sizeof(buffer));
     }
 

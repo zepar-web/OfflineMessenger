@@ -43,21 +43,21 @@ int main(int argc, char *argv[])
 
     char command[MAX];
     char buffer[MAX];
+    char username[MAX];
+    char password[MAX];
 
     printf("Welcome to my Messenger\n");
     while (1)
     {
-        fflush(stdin);
+        // fflush(stdin);
         fflush(stdout);
-        bzero(command, strlen(command));
         scanf("%s", command);
-
-        write(socketDesc, command, strlen(command));
 
         if (strcmp(command, "register") == 0 || strcmp(command, "login") == 0)
         {
-            char username[100];
-            char password[100];
+
+            //bzero(command, strlen(command));
+            write(socketDesc, command, strlen(command));
 
             printf("Username:\n");
             scanf("%s", username);
@@ -81,20 +81,20 @@ int main(int argc, char *argv[])
         }
         else if (strstr(command, "quit"))
         {
+            write(socketDesc, command, strlen(command));
             // break;
             // printf("O sa murim!\n");
             exit(EXIT_SUCCESS);
         }
         else
         {
-            printf("Nu esti logat.\n");
-            printf("Daca nu ai cont, foloseste comanda: register\n");
+            printf("Nu esti logat.\nDaca nu ai cont foloseste comanda: register.\n");
+            fflush(stdout);
         }
 
         /*if (read(socketDesc, &buffer, sizeof(buffer)) <= 0)
         {
             perror("Eroare la read()\n");
-
             return errno;
         }
         printf("%s\n", buffer);*/
