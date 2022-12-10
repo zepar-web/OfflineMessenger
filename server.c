@@ -10,7 +10,7 @@
 #include <pthread.h>
 #include <stdlib.h>
 #include <mysql/mysql.h>
-#define PORT 2189
+#define PORT 2181
 #define MAXBUFFER 100
 #define MYSQL_HOST "localhost"
 #define MYSQL_USER "root"
@@ -203,6 +203,7 @@ int Login(int desc, thData th)
 
     if (verifyUser(username) == 1)
     {
+        printf("am verificat\n");
         sprintf(query, "SELECT id FROM users WHERE name='%s' AND password='%s'", username, password);
 
         if (mysql_query(conn, query))
@@ -228,10 +229,13 @@ int Login(int desc, thData th)
         }
 
         userId = atoi(row[0]);
-        //clients[th.idTh]->idUser = userId;
+        // clients[th.idTh]->idUser = userId;
 
         mysql_free_result(result);
         mysql_close(conn);
+
+        // printf("%i\n",userId);
+        fflush(stdout);
 
         return userId;
 
@@ -343,7 +347,7 @@ void response(void *arg)
     // int count = 0;
     while (1)
     {
-        //bzero(buffer,sizeof(buffer));
+        // bzero(buffer,sizeof(buffer));
 
         if (read(tdL.thDesc, &buffer, sizeof(buffer)) <= 0)
         {
@@ -363,12 +367,13 @@ void response(void *arg)
             loginFlag = Login(tdL.thDesc, tdL);
             if (loginFlag == -1)
             {
-                tdL.idUser = loginFlag;
-                clients[tdL.idTh]->idUser = loginFlag;
-                write(tdL.thDesc, "Te-ai connectat cu succes!\n", 28);
+                write(tdL.thDesc, "Nume/parola gresit.\n", 21);
             }
             else
             {
+                tdL.idUser = loginFlag;
+                //clients[tdL.idTh]->idUser = loginFlag;
+                write(tdL.thDesc, "Te-ai connectat cu succes!\n", 28);
                 write(tdL.thDesc, "Nume/parola gresit.\n", 21);
             }
         }
