@@ -10,7 +10,7 @@
 #include <pthread.h>
 #include <stdlib.h>
 #include <mysql/mysql.h>
-#define PORT 2175
+#define PORT 3000
 #define MAXBUFFER 100
 #define MYSQL_HOST "localhost"
 #define MYSQL_USER "root"
@@ -337,6 +337,11 @@ void Register(int desc, thData th)
     write(desc, answer, strlen(answer));
 }
 
+void showUsers(int desc, thData th)
+{
+
+}
+
 void response(void *arg)
 {
     struct thData tdL;
@@ -376,19 +381,29 @@ void response(void *arg)
                     tdL.idUser = loginFlag;
                     // clients[tdL.idTh]->idUser = loginFlag;
                     write(tdL.thDesc, "Te-ai connectat cu succes!\n", 28);
-                    //write(tdL.thDesc, "Nume/parola gresit.\n", 21);
+                    // write(tdL.thDesc, "Nume/parola gresit.\n", 21);
                 }
             }
-        }else{
-            printf("Id-ul tau:%i\n",tdL.idUser);
-            write(tdL.thDesc,"Esti deja conectat!",20);
         }
-        // else if (strstr(buffer, "quit"))
-        // {
-        //     printf("O sa murim\n");
-        //     exit(EXIT_SUCCESS);
-        // }
+        else
+        {
+            printf("Id-ul tau:%i\n", tdL.idUser);
+            if (strcmp(buffer, "register") == 0 || strcmp(buffer, "login") == 0)
+            {
 
+                write(tdL.thDesc, "Esti deja conectat!", 20);
+            }else if(strcmp(buffer,"users")==0)
+            {
+                showUsers(tdL.thDesc,tdL);
+            }
+        }
+        if (strstr(buffer, "quit"))
+        {
+            printf("O sa murim\n");
+            exit(EXIT_SUCCESS);
+        }
+        //fflush(stdout);
+        //fflush(stdin);
         bzero(buffer, sizeof(buffer));
     }
 

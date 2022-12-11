@@ -45,14 +45,15 @@ int main(int argc, char *argv[])
     char buffer[MAX];
     char username[MAX];
     char password[MAX];
+    //int loginFlag=0;
 
     printf("Welcome to my Messenger\n");
     while (1)
     {
-        // fflush(stdin);
+        fflush(stdin);
         fflush(stdout);
         scanf("%s", command);
-
+        
         if (strcmp(command, "register") == 0 || strcmp(command, "login") == 0)
         {
 
