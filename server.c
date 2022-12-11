@@ -10,7 +10,7 @@
 #include <pthread.h>
 #include <stdlib.h>
 #include <mysql/mysql.h>
-#define PORT 3000
+#define PORT 3009
 #define MAXBUFFER 100
 #define MYSQL_HOST "localhost"
 #define MYSQL_USER "root"
@@ -160,7 +160,90 @@ int verifyUser(char name[50])
 
     return 0;
 }
+int getUserID(char name[50])
+{
+    MYSQL *conn = mysql_init(NULL);
 
+    int userID;
+
+    if (conn == NULL)
+    {
+        fprintf(stderr, "%s\n", mysql_error(conn));
+        exit(1);
+    }
+
+    if (!mysql_real_connect(conn, MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE, 0, NULL, 0))
+    {
+        fprintf(stderr, "%s\n", mysql_error(conn));
+        exit(2);
+    }
+
+    char query[256];
+
+    sprintf(query, "SELECT id FROM users WHERE name='%s'", name);
+
+    if (mysql_query(conn, query))
+    {
+        fprintf(stderr, "%s\n", mysql_error(conn));
+        mysql_close(conn);
+    }
+
+    MYSQL_RES *result = mysql_store_result(conn);
+
+    if (result == NULL)
+    {
+        printf("Eroare login!\n");
+        return -1;
+    }
+
+    MYSQL_ROW row = mysql_fetch_row(result);
+
+    if (row == NULL)
+    {
+        return -1;
+    }
+
+    userID = atoi(row[0]);
+    // clients[th.idTh]->idUser = userId;
+
+    mysql_free_result(result);
+    mysql_close(conn);
+
+    // printf("%i\n",userId);
+    fflush(stdout);
+
+    return userID;
+}
+
+void modifyLoginFlag(int id)
+{
+    MYSQL *conn = mysql_init(NULL);
+
+    if (conn == NULL)
+    {
+        fprintf(stderr, "%s\n", mysql_error(conn));
+        exit(1);
+    }
+
+    if (!mysql_real_connect(conn, MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE, 0, NULL, 0))
+    {
+        fprintf(stderr, "%s\n", mysql_error(conn));
+        exit(2);
+    }
+
+    char query[256];
+    // char *answer = (char *)malloc(50 * sizeof(char));
+
+    sprintf(query, "UPDATE users SET loginflag = 1 WHERE id = '%i'", id);
+
+    if (mysql_query(conn, query))
+    {
+        fprintf(stderr, "%s\n", mysql_error(conn));
+        mysql_close(conn);
+    }
+
+    mysql_close(conn);
+}
 int Login(int desc, thData th)
 {
     // write(desc, "Te-ai logat cu succes\n", 22);
@@ -204,7 +287,10 @@ int Login(int desc, thData th)
     if (verifyUser(username) == 1)
     {
         printf("am verificat\n");
-        sprintf(query, "SELECT id FROM users WHERE name='%s' AND password='%s'", username, password);
+
+        //modifyLoginFlag(username);
+
+        sprintf(query, "SELECT id, loginflag = 1 FROM users WHERE name='%s' AND password='%s'", username, password);
 
         if (mysql_query(conn, query))
         {
@@ -336,12 +422,11 @@ void Register(int desc, thData th)
     }
     write(desc, answer, strlen(answer));
 }
-
+// TO DO showUsers----------------------------
 void showUsers(int desc, thData th)
 {
-
 }
-
+//---------------------------------
 void response(void *arg)
 {
     struct thData tdL;
@@ -379,8 +464,9 @@ void response(void *arg)
                 else
                 {
                     tdL.idUser = loginFlag;
+                    modifyLoginFlag(loginFlag);
                     // clients[tdL.idTh]->idUser = loginFlag;
-                    write(tdL.thDesc, "Te-ai connectat cu succes!\n", 28);
+                    write(tdL.thDesc, "Te-ai conectat cu succes!\n", 27);
                     // write(tdL.thDesc, "Nume/parola gresit.\n", 21);
                 }
             }
@@ -392,9 +478,10 @@ void response(void *arg)
             {
 
                 write(tdL.thDesc, "Esti deja conectat!", 20);
-            }else if(strcmp(buffer,"users")==0)
+            }
+            else if (strcmp(buffer, "users") == 0)
             {
-                showUsers(tdL.thDesc,tdL);
+                showUsers(tdL.thDesc, tdL);
             }
         }
         if (strstr(buffer, "quit"))
@@ -402,8 +489,8 @@ void response(void *arg)
             printf("O sa murim\n");
             exit(EXIT_SUCCESS);
         }
-        //fflush(stdout);
-        //fflush(stdin);
+        // fflush(stdout);
+        // fflush(stdin);
         bzero(buffer, sizeof(buffer));
     }
 

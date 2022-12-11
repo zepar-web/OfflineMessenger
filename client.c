@@ -45,7 +45,7 @@ int main(int argc, char *argv[])
     char buffer[MAX];
     char username[MAX];
     char password[MAX];
-    //int loginFlag=0;
+    int loginFlag = 0;
 
     printf("Welcome to my Messenger\n");
     while (1)
@@ -53,11 +53,11 @@ int main(int argc, char *argv[])
         fflush(stdin);
         fflush(stdout);
         scanf("%s", command);
-        
-        if (strcmp(command, "register") == 0 || strcmp(command, "login") == 0)
+
+        if ((strcmp(command, "register") == 0 || strcmp(command, "login") == 0) && loginFlag == 0)
         {
 
-            //bzero(command, strlen(command));
+            // bzero(command, strlen(command));
             write(socketDesc, command, strlen(command));
 
             printf("Username:\n");
@@ -66,6 +66,11 @@ int main(int argc, char *argv[])
             printf("Password:\n");
             scanf("%s", password);
 
+            /*De facut un singur char pentru nume si parola si de terminat
+            partea de modificare a flag ului in baza de date*/
+            //+++++++++++++++++++++
+            /*De terminat comandat showUsers*/
+            
             write(socketDesc, username, strlen(username));
             write(socketDesc, password, strlen(password));
 
@@ -75,10 +80,28 @@ int main(int argc, char *argv[])
 
             // int msgReceived = 0;
             read(socketDesc, &buffer, sizeof(buffer));
-            // buffer[msgReceived]='\0';
 
+            if (strcmp(buffer, "Te-ai conectat cu succes!\n") == 0)
+            {
+                loginFlag = 1;
+            }
+            // buffer[msgReceived]='\0';
+            // printf("%i\n",loginFlag);
             printf("%s\n", buffer);
             fflush(stdout);
+        }
+        else if ((strcmp(command, "register") == 0 ||
+                  strcmp(command, "login") == 0 ||
+                  strcmp(command, "users") == 0 ) &&
+                  loginFlag == 1)
+        {
+            write(socketDesc, command, strlen(command));
+
+            bzero(buffer, sizeof(buffer));
+
+            read(socketDesc, &buffer, sizeof(buffer));
+
+            printf("%s\n", buffer);
         }
         else if (strstr(command, "quit"))
         {
