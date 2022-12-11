@@ -8,7 +8,7 @@
 #include <netdb.h>
 #include <string.h>
 #include <arpa/inet.h>
-
+// gcc -Wall client.c -o client
 extern int errno;
 int port;
 #define MAX 100
@@ -43,23 +43,60 @@ int main(int argc, char *argv[])
 
     char command[MAX];
     char buffer[MAX];
+    char username[MAX];
+    char password[MAX];
 
     printf("Welcome to my Messenger\n");
     while (1)
     {
-        //fflush(stdin);
-        //fflush(stdout);
+        // fflush(stdin);
+        fflush(stdout);
+        scanf("%s", command);
 
-        scanf("%[^\n]",command);
+        if (strcmp(command, "register") == 0 || strcmp(command, "login") == 0)
+        {
 
-        write(socketDesc, command, strlen(command));
+            //bzero(command, strlen(command));
+            write(socketDesc, command, strlen(command));
 
-        if (read(socketDesc, &buffer, sizeof(buffer)) <= 0)
+            printf("Username:\n");
+            scanf("%s", username);
+
+            printf("Password:\n");
+            scanf("%s", password);
+
+            write(socketDesc, username, strlen(username));
+            write(socketDesc, password, strlen(password));
+
+            bzero(buffer, sizeof(buffer));
+            // bzero(username, strlen(username));
+            // bzero(password, strlen(password));
+
+            // int msgReceived = 0;
+            read(socketDesc, &buffer, sizeof(buffer));
+            // buffer[msgReceived]='\0';
+
+            printf("%s\n", buffer);
+            fflush(stdout);
+        }
+        else if (strstr(command, "quit"))
+        {
+            write(socketDesc, command, strlen(command));
+            // break;
+            // printf("O sa murim!\n");
+            exit(EXIT_SUCCESS);
+        }
+        else
+        {
+            printf("Nu esti logat.\nDaca nu ai cont foloseste comanda: register.\n");
+            fflush(stdout);
+        }
+
+        /*if (read(socketDesc, &buffer, sizeof(buffer)) <= 0)
         {
             perror("Eroare la read()\n");
-
             return errno;
         }
-        printf("%s\n", buffer);
+        printf("%s\n", buffer);*/
     }
 }
