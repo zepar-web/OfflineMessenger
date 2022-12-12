@@ -11,7 +11,7 @@
 // gcc -Wall client.c -o client
 extern int errno;
 int port;
-#define MAX 100
+#define MAX 500
 
 int main(int argc, char *argv[])
 {

@@ -160,60 +160,6 @@ int verifyUser(char name[50])
 
     return 0;
 }
-int getUserID(char name[50])
-{
-    MYSQL *conn = mysql_init(NULL);
-
-    int userID;
-
-    if (conn == NULL)
-    {
-        fprintf(stderr, "%s\n", mysql_error(conn));
-        exit(1);
-    }
-
-    if (!mysql_real_connect(conn, MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE, 0, NULL, 0))
-    {
-        fprintf(stderr, "%s\n", mysql_error(conn));
-        exit(2);
-    }
-
-    char query[256];
-
-    sprintf(query, "SELECT id FROM users WHERE name='%s'", name);
-
-    if (mysql_query(conn, query))
-    {
-        fprintf(stderr, "%s\n", mysql_error(conn));
-        mysql_close(conn);
-    }
-
-    MYSQL_RES *result = mysql_store_result(conn);
-
-    if (result == NULL)
-    {
-        printf("Eroare login!\n");
-        return -1;
-    }
-
-    MYSQL_ROW row = mysql_fetch_row(result);
-
-    if (row == NULL)
-    {
-        return -1;
-    }
-
-    userID = atoi(row[0]);
-    // clients[th.idTh]->idUser = userId;
-
-    mysql_free_result(result);
-    mysql_close(conn);
-
-    // printf("%i\n",userId);
-    fflush(stdout);
-
-    return userID;
-}
 
 void modifyLoginFlag(int id)
 {
@@ -458,7 +404,7 @@ void Register(int desc, thData th)
     }
     write(desc, answer, strlen(answer));
 }
-// TO DO showUsers----------------------------
+
 char *showUsers(thData th)
 {
     MYSQL *conn = mysql_init(NULL);
@@ -494,7 +440,7 @@ char *showUsers(thData th)
     }
 
     int num_fields = mysql_num_fields(result);
-    char *tables =malloc(10000 * sizeof(char*));
+    char *tables =malloc(1000 * sizeof(char*));
 
     MYSQL_ROW row;
 
@@ -513,9 +459,11 @@ char *showUsers(thData th)
     // printf("%i\n",userId);
     fflush(stdout);
 
+    //printf("*%s*\n",tables);
+
     return tables;
 }
-//---------------------------------
+
 void response(void *arg)
 {
     struct thData tdL;
