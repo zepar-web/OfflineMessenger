@@ -46,6 +46,8 @@ int main(int argc, char *argv[])
     char username[100];
     char password[100];
     char userData[1000];
+    char message[500];
+    // char messageResponse[500];
     int loginFlag = 0;
 
     printf("Welcome to my Messenger\n");
@@ -53,11 +55,12 @@ int main(int argc, char *argv[])
     {
         fflush(stdin);
         fflush(stdout);
-        scanf("%s", command);
+        scanf(" %[^\n]s", command);
+        // scanf("%s", command);
 
         if (loginFlag == 0)
         {
-            if ((strcmp(command, "register") == 0 || strcmp(command, "login") == 0) && loginFlag == 0)
+            if (strcmp(command, "register") == 0 || strcmp(command, "login") == 0)
             {
                 // bzero(command, strlen(command));
                 write(socketDesc, command, strlen(command));
@@ -86,20 +89,13 @@ int main(int argc, char *argv[])
                 printf("%s\n", buffer);
                 fflush(stdout);
             }
-            else if (strstr(command, "quit"))
-            {
-                write(socketDesc, command, strlen(command));
-                // break;
-                // printf("O sa murim!\n");
-                exit(EXIT_SUCCESS);
-            }
             else
             {
                 printf("Nu esti logat.\nDaca nu ai cont foloseste comanda: register.\n");
                 fflush(stdout);
             }
         }
-        else if (strcmp(command, "logout") == 0 && loginFlag == 1)
+        else if (strcmp(command, "logout") == 0)
         {
             write(socketDesc, command, strlen(command));
 
@@ -111,10 +107,9 @@ int main(int argc, char *argv[])
 
             printf("%s\n", buffer);
         }
-        else if ((strcmp(command, "register") == 0 ||
-                  strcmp(command, "login") == 0 ||
-                  strcmp(command, "users") == 0) &&
-                 loginFlag == 1)
+        else if (strcmp(command, "register") == 0 ||
+                 strcmp(command, "login") == 0 ||
+                 strcmp(command, "users") == 0)
         {
             write(socketDesc, command, strlen(command));
 
@@ -124,17 +119,47 @@ int main(int argc, char *argv[])
 
             printf("%s\n", buffer);
         }
-        else if (strstr(command, "quit"))
+        else if (strncmp(command, "sendmsgto", 9) == 0)
         {
             write(socketDesc, command, strlen(command));
-            // break;
-            // printf("O sa murim!\n");
-            exit(EXIT_SUCCESS);
+
+            bzero(buffer, sizeof(buffer));
+
+            read(socketDesc, &buffer, sizeof(buffer));
+            if (strncmp(buffer, "Nu exista", 9) == 0)
+            {
+                printf("%s\n", buffer);
+            }
+            else if (strcmp(buffer, "good") == 0)
+            {
+                printf("Ce ganduri si sentimente doresti sa impartasesti?\n");
+                scanf(" %[^\n]s", message);
+
+                write(socketDesc, message, strlen(message));
+
+                bzero(buffer, sizeof(buffer));
+
+                read(socketDesc, &buffer, sizeof(buffer));
+
+                printf("%s\n", buffer);
+            }
+            else if (strncmp(buffer, "Utilizatorul", 12) == 0)
+            {
+                printf("%s\n",buffer);
+            }
         }
         else
         {
             printf("Wrong command\n");
             fflush(stdout);
+        }
+
+        if (strstr(command, "quit"))
+        {
+            write(socketDesc, command, strlen(command));
+            // break;
+            // printf("O sa murim!\n");
+            exit(EXIT_SUCCESS);
         }
 
         /*if (read(socketDesc, &buffer, sizeof(buffer)) <= 0)
@@ -144,4 +169,5 @@ int main(int argc, char *argv[])
         }
         printf("%s\n", buffer);*/
     }
+    close(socketDesc);
 }

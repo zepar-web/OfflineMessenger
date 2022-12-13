@@ -17,7 +17,6 @@
 #define MYSQL_PASSWORD "passwd"
 #define MYSQL_DATABASE "offmess"
 // gcc -Wall server.c -o server `mysql_config --cflags --libs'
-//`mysql_config --cflags --libs'
 
 // gcc -o server server.c $(mysql_config --cflags --libs)
 
@@ -30,8 +29,8 @@ typedef struct thData
     int idUser;
 } thData;
 
-thData *clients[100];
-int clientNumber = 0;
+thData *clients[50];
+int clientNumbers = 0;
 
 static void *treat(void *);
 
@@ -68,7 +67,7 @@ int main()
         return errno;
     }
 
-    if (listen(socketDesc, 100) == -1)
+    if (listen(socketDesc, 50) == -1)
     {
         perror("Eroare listen\n");
 
@@ -95,7 +94,7 @@ int main()
         td->thDesc = client;
         td->idUser = -1;
         clients[i] = td;
-        clientNumber = i;
+        clientNumbers = i;
 
         pthread_create(&th[i], NULL, &treat, td);
     }
@@ -138,8 +137,7 @@ int verifyUser(char name[50])
     if (mysql_query(conn, query))
     {
         fprintf(stderr, "%s\n", mysql_error(conn));
-
-        return 1;
+        mysql_close(conn);
     }
 
     MYSQL_RES *result = mysql_store_result(conn);
@@ -147,11 +145,13 @@ int verifyUser(char name[50])
     if (mysql_num_rows(result) > 0)
     {
         // name exist
+        mysql_close(conn);
         return 1;
     }
     else
     {
         // name does not exist
+        mysql_close(conn);
         return 0;
     }
 
@@ -422,7 +422,7 @@ char *showUsers(thData th)
         exit(2);
     }
 
-    char query[5000];
+    char query[256];
     strcpy(query, "SELECT name,loginflag FROM users");
 
     if (mysql_query(conn, query) != 0)
@@ -440,7 +440,7 @@ char *showUsers(thData th)
     }
 
     int num_fields = mysql_num_fields(result);
-    char *tables =malloc(1000 * sizeof(char*));
+    char *tables = malloc(1000 * sizeof(char *));
 
     MYSQL_ROW row;
 
@@ -451,7 +451,7 @@ char *showUsers(thData th)
             strcat(tables, row[i]);
             strcat(tables, " ");
         }
-        strcat(tables,"\n");
+        strcat(tables, "\n");
     }
     mysql_free_result(result);
     mysql_close(conn);
@@ -459,17 +459,155 @@ char *showUsers(thData th)
     // printf("%i\n",userId);
     fflush(stdout);
 
-    //printf("*%s*\n",tables);
+    // printf("*%s*\n",tables);
 
     return tables;
 }
 
+int getUserId(char name[50])
+{
+    MYSQL *conn = mysql_init(NULL);
+
+    if (conn == NULL)
+    {
+        fprintf(stderr, "%s\n", mysql_error(conn));
+        exit(1);
+    }
+
+    if (!mysql_real_connect(conn, MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE, 0, NULL, 0))
+    {
+        fprintf(stderr, "%s\n", mysql_error(conn));
+        mysql_close(conn);
+        exit(2);
+    }
+    char query[256];
+    int userID = 0;
+
+    sprintf(query, "SELECT id FROM users WHERE name='%s'", name);
+
+    if (mysql_query(conn, query))
+    {
+        fprintf(stderr, "%s\n", mysql_error(conn));
+
+        return -1;
+    }
+
+    MYSQL_RES *result = mysql_store_result(conn);
+
+    if (result == NULL)
+    {
+        printf("Eroare login!\n");
+        return -1;
+    }
+
+    MYSQL_ROW row = mysql_fetch_row(result);
+
+    if (row == NULL)
+    {
+        return -1;
+    }
+
+    userID = atoi(row[0]);
+    // clients[th.idTh]->idUser = userId;
+
+    mysql_free_result(result);
+    mysql_close(conn);
+
+    // printf("%i\n",userId);
+    fflush(stdout);
+
+    return userID;
+}
+
+bool isOnline(char name[50])
+{
+    MYSQL *conn = mysql_init(NULL);
+
+    if (conn == NULL)
+    {
+        fprintf(stderr, "%s\n", mysql_error(conn));
+        exit(1);
+    }
+
+    if (!mysql_real_connect(conn, MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE, 0, NULL, 0))
+    {
+        fprintf(stderr, "%s\n", mysql_error(conn));
+        exit(2);
+    }
+
+    char query[256];
+    sprintf(query, "SELECT * FROM users WHERE name = '%s' and loginflag = 1", name);
+
+    if (mysql_query(conn, query))
+    {
+        fprintf(stderr, "%s\n", mysql_error(conn));
+        mysql_close(conn);
+    }
+
+    MYSQL_RES *result = mysql_store_result(conn);
+
+    if (mysql_num_rows(result) >= 1)
+    {
+        // is online
+        mysql_close(conn);
+        return true;
+    }
+    else
+    {
+        // is offline
+        mysql_close(conn);
+        return false;
+    }
+
+    mysql_free_result(result);
+    mysql_close(conn);
+
+    return false;
+}
+
+void sendMessage(int desc, thData th, char buffer[100])
+{
+    printf("am intrat in sendmsg\n");
+    char nume[100] = " ";
+    char comanda[100] = " ";
+    char messageRead[500] = " ";
+    char warning[5000] = " ";
+
+    sscanf(buffer, "%s %s", comanda, nume);
+    printf("%s\n", nume);
+
+    if (verifyUser(nume) == 1)
+    {
+        printf("am verificat\n");
+        if (isOnline(nume) == true)
+        {
+            write(desc, "good", 4);
+            read(desc, messageRead, sizeof(messageRead));
+
+            printf("%s\n", messageRead);
+
+            write(desc, messageRead, strlen(messageRead));
+        }
+        else if (isOnline(nume) == false)
+        {
+            sprintf(warning, "Utilizatorul '%s' nu este online.\nMesajul trimis o sa il primeasca cand se conecteaza!", nume);
+            write(desc, warning, strlen(warning));
+        }
+    }
+    else
+    {
+        sprintf(warning, "Nu exista niciun utilizator cu numele '%s'.", nume);
+        write(desc, warning, strlen(warning));
+    }
+}
 void response(void *arg)
 {
     struct thData tdL;
     tdL = *((struct thData *)arg);
 
     char buffer[MAXBUFFER];
+    char buffMSG[MAXBUFFER];
+    char *answer;
     // char answer[MAXBUFFER];
     int loginFlag = 0;
     // int count = 0;
@@ -504,9 +642,9 @@ void response(void *arg)
                 {
                     tdL.idUser = loginFlag;
                     modifyLoginFlag(loginFlag);
-                    // clients[tdL.idTh]->idUser = loginFlag;
                     write(tdL.thDesc, "Te-ai conectat cu succes!\n", 27);
-                    // write(tdL.thDesc, "Nume/parola gresit.\n", 21);
+                    clients[tdL.idTh]->idUser = loginFlag;
+                    //  write(tdL.thDesc, "Nume/parola gresit.\n", 21);
                 }
             }
             else if (strstr(buffer, "quit"))
@@ -534,6 +672,14 @@ void response(void *arg)
                 // showUsers(tdL);
                 // strcpy(answer, showUsers(tdL));
                 write(tdL.thDesc, showUsers(tdL), strlen(showUsers(tdL)));
+            }
+            else if (strncmp(buffer, "sendmsgto", 9) == 0)
+            {
+                // read(tdL.thDesc,&buffMSG,sizeof(buffMSG));
+                sendMessage(tdL.thDesc, tdL, buffer);
+                // answer = sendMessage(buffMSG);
+                // printf("%s\n",answer);
+                // write(tdL.thDesc, sendMessage(tdL.thDesc), strlen(sendMessage(tdL.thDesc)));
             }
             else if (strstr(buffer, "quit"))
             {
