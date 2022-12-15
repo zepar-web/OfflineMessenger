@@ -17,6 +17,7 @@
 #define MYSQL_USER "root"
 #define MYSQL_PASSWORD "passwd"
 #define MYSQL_DATABASE "offmess"
+
 // gcc -Wall server.c -o server `mysql_config --cflags --libs'
 
 // gcc -Wall -o server server.c $(mysql_config --cflags --libs) -pthread
@@ -37,8 +38,28 @@ static void *treat(void *);
 
 void response(void *);
 
+// int verifyDatabase(MYSQL *conn,char *db_name)
+// {
+
+// }
+
+//TODO
 int main()
 {
+    // MYSQL *conn = mysql_init(NULL);
+
+    // if (conn == NULL)
+    // {
+    //     fprintf(stderr, "%s\n", mysql_error(conn));
+    //     exit(1);
+    // }
+
+    // if (!mysql_real_connect(conn, MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE, 0, NULL, 0))
+    // {
+    //     fprintf(stderr, "%s\n", mysql_error(conn));
+    //     exit(2);
+    // }
+
     struct sockaddr_in server;
     struct sockaddr_in client2server;
     int socketDesc;
@@ -253,6 +274,7 @@ int Login(int desc, thData th)
 
     bzero(username, sizeof(username));
     bzero(password, sizeof(password));
+    bzero(userData,sizeof(userData));
     // bzero(answer, sizeof(answer));
     fflush(stdin);
     fflush(stdout);
@@ -1107,7 +1129,7 @@ void replyMessage(int desc, thData th, char buffer[], int idUser)
     int clientDesc;
     int idMessage = 0;
 
-    bzero(nume,sizeof(nume));
+    bzero(nume, sizeof(nume));
 
     sscanf(buffer, "%s %s %i", comanda, nume, &idMessage);
 
@@ -1125,7 +1147,7 @@ void replyMessage(int desc, thData th, char buffer[], int idUser)
             // sprintf(toSend, "Mesaj de la %s: ", getNameById(th.idUser));
 
             // strcat(toSend, messageRead);
-            bzero(toSend,sizeof(toSend));
+            bzero(toSend, sizeof(toSend));
 
             strcat(toSend, getNameById(idUser));
             strcat(toSend, " ");
@@ -1265,7 +1287,7 @@ void response(void *arg)
             }
             else if (strncmp(buffer, "reply", 5) == 0)
             {
-                replyMessage(tdL.thDesc,tdL,buffer,tdL.idUser);
+                replyMessage(tdL.thDesc, tdL, buffer, tdL.idUser);
             }
         }
 

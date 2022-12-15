@@ -12,7 +12,8 @@
 #include <sys/wait.h>
 #include <signal.h>
 #include <time.h>
-// gcc -Wall client.c -o client
+
+// gcc -Wall client.c -o client -pthread
 
 extern int errno;
 int port;
