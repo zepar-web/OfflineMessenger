@@ -10,7 +10,7 @@
 #include <pthread.h>
 #include <stdlib.h>
 #include <mysql/mysql.h>
-#define PORT 3004
+#define PORT 3005
 #define MAXBUFFER 100
 #define MYSQL_HOST "localhost"
 #define MYSQL_USER "root"
@@ -90,10 +90,10 @@ int main()
         }
 
         td = (struct thData *)malloc(sizeof(struct thData));
+        clients[i] = td;
         td->idTh = i++;
         td->thDesc = client;
         td->idUser = -1;
-        clients[i] = td;
         clientNumbers = i;
 
         pthread_create(&th[i], NULL, &treat, td);
@@ -115,7 +115,7 @@ static void *treat(void *arg)
     return (NULL);
 }
 
-int verifyUser(char name[50])
+int verifyUser(char name[])
 {
     MYSQL *conn = mysql_init(NULL);
 
@@ -405,7 +405,7 @@ void Register(int desc, thData th)
     write(desc, answer, strlen(answer));
 }
 
-char *showUsers(thData th)
+char *showUsers()
 {
     MYSQL *conn = mysql_init(NULL);
 
@@ -464,7 +464,69 @@ char *showUsers(thData th)
     return tables;
 }
 
-int getUserId(char name[50])
+void *insertOnlineMesssageIntoDataBase(int sender, int receiver, char message[])
+{
+    MYSQL *conn = mysql_init(NULL);
+
+    if (conn == NULL)
+    {
+        fprintf(stderr, "%s\n", mysql_error(conn));
+        exit(1);
+    }
+
+    if (!mysql_real_connect(conn, MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE, 0, NULL, 0))
+    {
+        fprintf(stderr, "%s\n", mysql_error(conn));
+        mysql_close(conn);
+        exit(2);
+    }
+
+    char query[256];
+
+    sprintf(query, "INSERT INTO messages (id_sender, id_receiver, is_read, message) VALUES (%i, %i, 1, '%s')", sender, receiver, message);
+
+    if (mysql_query(conn, query) != 0)
+    {
+        fprintf(stderr, "%s\n", mysql_error(conn));
+        exit(3);
+        mysql_close(conn);
+    }
+
+    mysql_close(conn);
+}
+
+void *insertOfflineMesssageIntoDataBase(int sender, int receiver, char message[])
+{
+    MYSQL *conn = mysql_init(NULL);
+
+    if (conn == NULL)
+    {
+        fprintf(stderr, "%s\n", mysql_error(conn));
+        exit(1);
+    }
+
+    if (!mysql_real_connect(conn, MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE, 0, NULL, 0))
+    {
+        fprintf(stderr, "%s\n", mysql_error(conn));
+        mysql_close(conn);
+        exit(2);
+    }
+
+    char query[256];
+
+    sprintf(query, "INSERT INTO messages (id_sender, id_receiver, is_read, message) VALUES (%i, %i, 0, '%s')", sender, receiver, message);
+
+    if (mysql_query(conn, query) != 0)
+    {
+        fprintf(stderr, "%s\n", mysql_error(conn));
+        exit(3);
+        mysql_close(conn);
+    }
+
+    mysql_close(conn);
+}
+
+int getUserId(char name[])
 {
     MYSQL *conn = mysql_init(NULL);
 
@@ -519,7 +581,7 @@ int getUserId(char name[50])
     return userID;
 }
 
-bool isOnline(char name[50])
+bool isOnline(char name[])
 {
     MYSQL *conn = mysql_init(NULL);
 
@@ -565,13 +627,74 @@ bool isOnline(char name[50])
     return false;
 }
 
-void sendMessage(int desc, thData th, char buffer[100])
+char *getNameById(int id)
+{
+    MYSQL *conn = mysql_init(NULL);
+
+    if (conn == NULL)
+    {
+        fprintf(stderr, "%s\n", mysql_error(conn));
+        exit(1);
+    }
+
+    if (!mysql_real_connect(conn, MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE, 0, NULL, 0))
+    {
+        fprintf(stderr, "%s\n", mysql_error(conn));
+        mysql_close(conn);
+        exit(2);
+    }
+
+    char query[256];
+    sprintf(query, "SELECT name FROM users WHERE id = %i", id);
+
+    if (mysql_query(conn, query) != 0)
+    {
+        fprintf(stderr, "%s\n", mysql_error(conn));
+        exit(3);
+        mysql_close(conn);
+    }
+
+    MYSQL_RES *result = mysql_store_result(conn);
+
+    if (result == NULL)
+    {
+        printf("Eroare showUsers!\n");
+    }
+
+    int num_fields = mysql_num_fields(result);
+    char *tables = malloc(1000 * sizeof(char *));
+
+    MYSQL_ROW row;
+
+    while ((row = mysql_fetch_row(result)))
+    {
+        for (int i = 0; i < num_fields; i++)
+        {
+            strcat(tables, row[i]);
+            strcat(tables, " ");
+        }
+        // strcat(tables, "\n");
+    }
+    mysql_free_result(result);
+    mysql_close(conn);
+
+    // printf("%i\n",userId);
+    fflush(stdout);
+
+    // printf("*%s*\n",tables);
+
+    return tables;
+}
+
+void sendMessage(int desc, thData th, char buffer[])
 {
     printf("am intrat in sendmsg\n");
     char nume[100] = " ";
     char comanda[100] = " ";
     char messageRead[500] = " ";
     char warning[5000] = " ";
+    char toSend[1000] = " ";
+    int clientDesc;
 
     sscanf(buffer, "%s %s", comanda, nume);
     printf("%s\n", nume);
@@ -581,17 +704,39 @@ void sendMessage(int desc, thData th, char buffer[100])
         printf("am verificat\n");
         if (isOnline(nume) == true)
         {
-            write(desc, "good", 4);
+            write(desc, "esteOnline", 10);
+
             read(desc, messageRead, sizeof(messageRead));
+
+            sprintf(toSend, "Mesaj de la %s: ", getNameById(th.idUser));
+
+            strcat(toSend, messageRead);
 
             printf("%s\n", messageRead);
 
-            write(desc, messageRead, strlen(messageRead));
+            for (int i = 0; i < clientNumbers; i++)
+            {
+                if (clients[i]->idUser == getUserId(nume))
+                {
+                    clientDesc = clients[i]->thDesc;
+                    // printf("%i\n", clientDesc);
+                    // printf("Am gasit\n");
+                    write(clientDesc, toSend, strlen(toSend));
+                    insertOnlineMesssageIntoDataBase(th.idUser, getUserId(nume), messageRead);
+                    printf("Am trimis\n");
+                }
+            }
         }
         else if (isOnline(nume) == false)
         {
             sprintf(warning, "Utilizatorul '%s' nu este online.\nMesajul trimis o sa il primeasca cand se conecteaza!", nume);
             write(desc, warning, strlen(warning));
+
+            read(desc, messageRead, sizeof(messageRead));
+
+            printf("%s\n", messageRead);
+
+            insertOfflineMesssageIntoDataBase(th.idUser, getUserId(nume), messageRead);
         }
     }
     else
@@ -600,6 +745,85 @@ void sendMessage(int desc, thData th, char buffer[100])
         write(desc, warning, strlen(warning));
     }
 }
+
+char *showMessageHistory(char buffer[], int idUser)
+{
+    MYSQL *conn = mysql_init(NULL);
+
+    if (conn == NULL)
+    {
+        fprintf(stderr, "%s\n", mysql_error(conn));
+        exit(1);
+    }
+
+    if (!mysql_real_connect(conn, MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE, 0, NULL, 0))
+    {
+        fprintf(stderr, "%s\n", mysql_error(conn));
+        mysql_close(conn);
+        exit(2);
+    }
+
+    char comanda[100];
+    char nume[100];
+    char query[256];
+
+    sscanf(buffer, "%s %s", comanda, nume);
+
+    sprintf(query, "SELECT id_sender,message FROM messages WHERE (id_sender = %i AND id_receiver = %i) OR (id_sender = %i AND id_receiver = %i)", idUser, getUserId(nume), getUserId(nume), idUser);
+
+    if (mysql_query(conn, query) != 0)
+    {
+        fprintf(stderr, "%s\n", mysql_error(conn));
+        exit(3);
+        mysql_close(conn);
+    }
+
+    MYSQL_RES *result = mysql_store_result(conn);
+
+    if (result == NULL)
+    {
+        printf("Eroare showUsers!\n");
+    }
+
+    int num_fields = mysql_num_fields(result);
+    // char *returnTable = malloc(1000 * sizeof(char *));
+
+    MYSQL_ROW row;
+
+    char *table = malloc(1000 * sizeof(char *));
+    bzero(table, sizeof(table));
+    strcat(table, "Istoric mesaje!\n");
+    while ((row = mysql_fetch_row(result)))
+    {
+        strcat(table, "Mesaj de la: ");
+        for (int i = 0; i < num_fields; i++)
+        {
+            if (i == 0)
+            {
+                strcat(table, getNameById(atoi(row[0])));
+                strcat(table, "--->");
+            }
+            else
+            {
+                strcat(table, row[1]);
+            }
+        }
+        strcat(table, "\n");
+    }
+    mysql_free_result(result);
+    mysql_close(conn);
+
+    // printf("%i\n",userId);
+    fflush(stdout);
+
+    // printf("%s\n",table);
+
+    // printf("%s\n", finalTables);
+    // strcpy(returnTable,table);
+
+    return table;
+}
+
 void response(void *arg)
 {
     struct thData tdL;
@@ -609,7 +833,7 @@ void response(void *arg)
     char buffMSG[MAXBUFFER];
     char *answer;
     // char answer[MAXBUFFER];
-    int loginFlag = 0;
+    int idLogin = 0;
     // int count = 0;
     while (1)
     {
@@ -619,6 +843,7 @@ void response(void *arg)
         {
             printf("[TH %d]\n", tdL.idTh);
             perror("Eroare la read()\n");
+            // close(tdL.thDesc);
         }
         buffer[strlen(buffer)] = '\0';
         printf("[Th id: %d] Mesaj de la comandant : %s\n", tdL.idTh, buffer);
@@ -633,24 +858,26 @@ void response(void *arg)
             }
             else if (strncmp(buffer, "login", 6) == 0)
             {
-                loginFlag = Login(tdL.thDesc, tdL);
-                if (loginFlag == -1)
+                idLogin = Login(tdL.thDesc, tdL);
+                if (idLogin == -1)
                 {
                     write(tdL.thDesc, "Nume/parola gresit.\n", 21);
                 }
                 else
                 {
-                    tdL.idUser = loginFlag;
-                    modifyLoginFlag(loginFlag);
+                    tdL.idUser = idLogin;
+                    modifyLoginFlag(idLogin);
+                    printf("%i\n", tdL.thDesc);
                     write(tdL.thDesc, "Te-ai conectat cu succes!\n", 27);
-                    clients[tdL.idTh]->idUser = loginFlag;
+                    clients[tdL.idTh]->idUser = idLogin;
                     //  write(tdL.thDesc, "Nume/parola gresit.\n", 21);
                 }
             }
             else if (strstr(buffer, "quit"))
             {
-                printf("O sa murim\n");
-                exit(EXIT_SUCCESS);
+                // printf("O sa murim\n");
+                pthread_exit(NULL);
+                // exit(EXIT_SUCCESS);
             }
         }
         else
@@ -663,7 +890,7 @@ void response(void *arg)
             }
             else if (strcmp(buffer, "logout") == 0)
             {
-                modifyLogoutFlag(loginFlag);
+                modifyLogoutFlag(idLogin);
                 tdL.idUser = -1;
                 write(tdL.thDesc, "Te-ai deconectat cu succes!", 28);
             }
@@ -671,34 +898,30 @@ void response(void *arg)
             {
                 // showUsers(tdL);
                 // strcpy(answer, showUsers(tdL));
-                write(tdL.thDesc, showUsers(tdL), strlen(showUsers(tdL)));
+                write(tdL.thDesc, showUsers(), strlen(showUsers()));
             }
             else if (strncmp(buffer, "sendmsgto", 9) == 0)
             {
                 // read(tdL.thDesc,&buffMSG,sizeof(buffMSG));
                 sendMessage(tdL.thDesc, tdL, buffer);
+                // sendMessage(tdL.thDesc, tdL, buffer);
                 // answer = sendMessage(buffMSG);
                 // printf("%s\n",answer);
                 // write(tdL.thDesc, sendMessage(tdL.thDesc), strlen(sendMessage(tdL.thDesc)));
             }
+            else if (strncmp(buffer, "msghistory", 10) == 0)
+            {
+                write(tdL.thDesc, showMessageHistory(buffer, tdL.idUser), strlen(showMessageHistory(buffer, tdL.idUser)));
+            }
             else if (strstr(buffer, "quit"))
             {
-                printf("O sa murim\n");
-                exit(EXIT_SUCCESS);
+                // printf("O sa murim\n");
+                pthread_exit(NULL);
+                // exit(EXIT_SUCCESS);
             }
         }
         // fflush(stdout);
         // fflush(stdin);
         bzero(buffer, sizeof(buffer));
     }
-
-    /*if (write(tdL.thDesc, "te salut", strlen("te salut")) <= 0)
-    {
-        printf("[TH %d]\n", tdL.idTh);
-        perror("Eroare la write()\n");
-    }
-    else
-    {
-        printf("Mesaj trimis cu succes comandante, te pup si te respect!\n");
-    }*/
 }

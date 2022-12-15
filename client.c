@@ -8,10 +8,67 @@
 #include <netdb.h>
 #include <string.h>
 #include <arpa/inet.h>
+#include <pthread.h>
+#include <sys/wait.h>
+#include <signal.h>
+#include <time.h>
 // gcc -Wall client.c -o client
+
 extern int errno;
 int port;
 #define MAX 500
+
+int loginFlag = 0;
+pthread_t th;
+
+void *msgTh(void *socket_desc)
+{
+
+    int sock = *(int *)socket_desc;
+    char buffer[MAX];
+    char message[MAX];
+    while (1)
+    {
+
+        bzero(buffer, MAX);
+
+        if (read(sock, buffer, MAX) <= 0)
+        {
+            printf("eroare\n");
+            fflush(stdout);
+        }
+
+        if (strcmp(buffer, "Te-ai deconectat cu succes!") == 0)
+        {
+            loginFlag = 0;
+        }
+        else if (strcmp(buffer, "Te-ai conectat cu succes!\n") == 0)
+        {
+            loginFlag = 1;
+        }
+        else if (strncmp(buffer, "esteOnline", 10) == 0 || strncmp(buffer, "Utilizatorul", 12) == 0)
+        {
+            printf("Ce ganduri si sentimente doresti sa impartasesti?\n");
+
+            scanf(" %[^\n]s", message);
+
+            write(sock, message, strlen(message));
+
+            printf("Mesaj trimis\n");
+
+            bzero(buffer, sizeof(buffer));
+
+            // pthread_kill(th, SIGUSR2);
+            //  exit(1);
+        }
+
+        printf("%s\n", buffer);
+
+        fflush(stdout);
+        fflush(stdin);
+    }
+    pthread_exit(NULL);
+}
 
 int main(int argc, char *argv[])
 {
@@ -42,52 +99,37 @@ int main(int argc, char *argv[])
     }
 
     char command[MAX];
-    char buffer[MAX];
     char username[100];
     char password[100];
     char userData[1000];
-    char message[500];
-    // char messageResponse[500];
-    int loginFlag = 0;
 
     printf("Welcome to my Messenger\n");
+
     while (1)
     {
         fflush(stdin);
         fflush(stdout);
+
+        bzero(command,sizeof(command));
+        
         scanf(" %[^\n]s", command);
         // scanf("%s", command);
+
+        int sock2 = socketDesc;
+        pthread_create(&th, NULL, &msgTh, (void *)&sock2);
 
         if (loginFlag == 0)
         {
             if (strcmp(command, "register") == 0 || strcmp(command, "login") == 0)
             {
-                // bzero(command, strlen(command));
                 write(socketDesc, command, strlen(command));
 
                 printf("Sintaxa:nume parola\n");
                 scanf(" %[^\n]s", userData);
-                // fgets(userData,100,stdin);
+
                 sscanf(userData, "%s %s", username, password);
 
                 write(socketDesc, userData, strlen(userData));
-                // write(socketDesc, password, strlen(password));
-
-                bzero(buffer, sizeof(buffer));
-                // bzero(username, strlen(username));
-                // bzero(password, strlen(password));
-
-                // int msgReceived = 0;
-                read(socketDesc, &buffer, sizeof(buffer));
-
-                if (strcmp(buffer, "Te-ai conectat cu succes!\n") == 0)
-                {
-                    loginFlag = 1;
-                }
-                // buffer[msgReceived]='\0';
-                // printf("%i\n",loginFlag);
-                printf("%s\n", buffer);
-                fflush(stdout);
             }
             else
             {
@@ -95,79 +137,38 @@ int main(int argc, char *argv[])
                 fflush(stdout);
             }
         }
-        else if (strcmp(command, "logout") == 0)
-        {
-            write(socketDesc, command, strlen(command));
-
-            bzero(buffer, sizeof(buffer));
-
-            read(socketDesc, &buffer, sizeof(buffer));
-
-            loginFlag = 0;
-
-            printf("%s\n", buffer);
-        }
-        else if (strcmp(command, "register") == 0 ||
-                 strcmp(command, "login") == 0 ||
-                 strcmp(command, "users") == 0)
-        {
-            write(socketDesc, command, strlen(command));
-
-            bzero(buffer, sizeof(buffer));
-
-            read(socketDesc, &buffer, sizeof(buffer));
-
-            printf("%s\n", buffer);
-        }
-        else if (strncmp(command, "sendmsgto", 9) == 0)
-        {
-            write(socketDesc, command, strlen(command));
-
-            bzero(buffer, sizeof(buffer));
-
-            read(socketDesc, &buffer, sizeof(buffer));
-            if (strncmp(buffer, "Nu exista", 9) == 0)
-            {
-                printf("%s\n", buffer);
-            }
-            else if (strcmp(buffer, "good") == 0)
-            {
-                printf("Ce ganduri si sentimente doresti sa impartasesti?\n");
-                scanf(" %[^\n]s", message);
-
-                write(socketDesc, message, strlen(message));
-
-                bzero(buffer, sizeof(buffer));
-
-                read(socketDesc, &buffer, sizeof(buffer));
-
-                printf("%s\n", buffer);
-            }
-            else if (strncmp(buffer, "Utilizatorul", 12) == 0)
-            {
-                printf("%s\n",buffer);
-            }
-        }
         else
         {
-            printf("Wrong command\n");
-            fflush(stdout);
-        }
+            if (strcmp(command, "logout") == 0)
+            {
+                write(socketDesc, command, strlen(command));
+            }
+            else if (strcmp(command, "register") == 0 ||
+                     strcmp(command, "login") == 0 ||
+                     strcmp(command, "users") == 0 ||
+                     strncmp(command, "msghistory", 10) == 0)
+            {
+                write(socketDesc, command, strlen(command));
+            }
+            else if (strncmp(command, "sendmsgto", 9) == 0)
+            {
+                write(socketDesc, command, strlen(command));
 
-        if (strstr(command, "quit"))
-        {
-            write(socketDesc, command, strlen(command));
-            // break;
-            // printf("O sa murim!\n");
-            exit(EXIT_SUCCESS);
-        }
+                sleep(2);
+            }
+            else
+            {
+                printf("Wrong command\n");
+                fflush(stdout);
+            }
 
-        /*if (read(socketDesc, &buffer, sizeof(buffer)) <= 0)
-        {
-            perror("Eroare la read()\n");
-            return errno;
+            if (strstr(command, "quit"))
+            {
+                write(socketDesc, command, strlen(command));
+
+                exit(EXIT_SUCCESS);
+            }
         }
-        printf("%s\n", buffer);*/
     }
     close(socketDesc);
 }
