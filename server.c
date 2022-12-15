@@ -448,7 +448,7 @@ char *showUsers()
     return tables;
 }
 
-void *insertOnlineMesssageIntoDataBase(int sender, int receiver, char message[])
+void insertOnlineMesssageIntoDataBase(int sender, int receiver, char message[])
 {
     MYSQL *conn = mysql_init(NULL);
 
@@ -479,7 +479,7 @@ void *insertOnlineMesssageIntoDataBase(int sender, int receiver, char message[])
     mysql_close(conn);
 }
 
-void *insertOfflineMesssageIntoDataBase(int sender, int receiver, char message[])
+void insertOfflineMesssageIntoDataBase(int sender, int receiver, char message[])
 {
     MYSQL *conn = mysql_init(NULL);
 
@@ -753,7 +753,7 @@ char *showMessageHistory(char buffer[], int idUser)
 
     sscanf(buffer, "%s %s", comanda, nume);
 
-    sprintf(query, "SELECT id_message,id_sender,message FROM messages WHERE (id_sender = %i AND id_receiver = %i) OR (id_sender = %i AND id_receiver = %i)", idUser, getUserId(nume), getUserId(nume), idUser);
+    sprintf(query, "SELECT id_message, id_sender, message FROM messages WHERE (id_sender = %i AND id_receiver = %i) OR (id_sender = %i AND id_receiver = %i)", idUser, getUserId(nume), getUserId(nume), idUser);
 
     if (mysql_query(conn, query) != 0)
     {
@@ -794,7 +794,7 @@ char *showMessageHistory(char buffer[], int idUser)
                 strcat(table, "--->");
                 strcat(table, " ");
             }
-            else
+            else if (i == 2)
             {
                 strcat(table, row[2]);
             }
@@ -937,6 +937,7 @@ char *offlineMessages(int id)
     int num_fields = mysql_num_fields(result);
 
     char *table = malloc(1000 * sizeof(char *));
+    
     bzero(table, sizeof(table));
 
     if (countOfflineMessages(id) == 0)
@@ -964,7 +965,7 @@ char *offlineMessages(int id)
                     strcat(table, "--->");
                     strcat(table, " ");
                 }
-                else
+                else if (i == 2)
                 {
                     strcat(table, row[2]);
                 }
