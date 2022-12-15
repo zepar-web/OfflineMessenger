@@ -12,14 +12,14 @@
 #include <mysql/mysql.h>
 
 #define PORT 3005
-#define MAXBUFFER 100
+#define MAXBUFFER 500
 #define MYSQL_HOST "localhost"
 #define MYSQL_USER "root"
 #define MYSQL_PASSWORD "passwd"
 #define MYSQL_DATABASE "offmess"
 // gcc -Wall server.c -o server `mysql_config --cflags --libs'
 
-// gcc -o server server.c $(mysql_config --cflags --libs)
+// gcc -Wall -o server server.c $(mysql_config --cflags --libs) -pthread
 
 extern int errno;
 
@@ -448,7 +448,7 @@ char *showUsers()
     return tables;
 }
 
-void *insertOnlineMesssageIntoDataBase(int sender, int receiver, char message[])
+void insertOnlineMesssageIntoDataBase(int sender, int receiver, char message[])
 {
     MYSQL *conn = mysql_init(NULL);
 
@@ -479,7 +479,7 @@ void *insertOnlineMesssageIntoDataBase(int sender, int receiver, char message[])
     mysql_close(conn);
 }
 
-void *insertOfflineMesssageIntoDataBase(int sender, int receiver, char message[])
+void insertOfflineMesssageIntoDataBase(int sender, int receiver, char message[])
 {
     MYSQL *conn = mysql_init(NULL);
 
@@ -753,7 +753,7 @@ char *showMessageHistory(char buffer[], int idUser)
 
     sscanf(buffer, "%s %s", comanda, nume);
 
-    sprintf(query, "SELECT id_sender,message FROM messages WHERE (id_sender = %i AND id_receiver = %i) OR (id_sender = %i AND id_receiver = %i)", idUser, getUserId(nume), getUserId(nume), idUser);
+    sprintf(query, "SELECT id_message, id_sender, message FROM messages WHERE (id_sender = %i AND id_receiver = %i) OR (id_sender = %i AND id_receiver = %i)", idUser, getUserId(nume), getUserId(nume), idUser);
 
     if (mysql_query(conn, query) != 0)
     {
@@ -779,17 +779,24 @@ char *showMessageHistory(char buffer[], int idUser)
     strcat(table, "Istoric mesaje!\n");
     while ((row = mysql_fetch_row(result)))
     {
-        strcat(table, "Mesaj de la: ");
+        strcat(table, "(MsgId:");
+        strcat(table, row[0]);
+        strcat(table, ")");
+        strcat(table, " ");
+        strcat(table, "Mesaj de la:");
+        strcat(table, " ");
+
         for (int i = 0; i < num_fields; i++)
         {
-            if (i == 0)
+            if (i == 1)
             {
-                strcat(table, getNameById(atoi(row[0])));
+                strcat(table, getNameById(atoi(row[1])));
                 strcat(table, "--->");
+                strcat(table, " ");
             }
-            else
+            else if (i == 2)
             {
-                strcat(table, row[1]);
+                strcat(table, row[2]);
             }
         }
         strcat(table, "\n");
@@ -909,7 +916,7 @@ char *offlineMessages(int id)
 
     char query[256];
 
-    sprintf(query, "SELECT id_sender, message FROM messages WHERE id_receiver = %i and is_read = 0", id);
+    sprintf(query, "SELECT id_message,id_sender, message FROM messages WHERE id_receiver = %i and is_read = 0", id);
 
     if (mysql_query(conn, query) != 0)
     {
@@ -929,8 +936,8 @@ char *offlineMessages(int id)
 
     int num_fields = mysql_num_fields(result);
 
-    char *table = malloc(1000 * sizeof(char *))
-    ;
+    char *table = malloc(1000 * sizeof(char *));
+    
     bzero(table, sizeof(table));
 
     if (countOfflineMessages(id) == 0)
@@ -943,24 +950,31 @@ char *offlineMessages(int id)
 
         while ((row = mysql_fetch_row(result)))
         {
-            strcat(table, "Mesaj de la: ");
+            strcat(table, "(MsgId:");
+            strcat(table, row[0]);
+            strcat(table, ")");
+            strcat(table, " ");
+            strcat(table, "Mesaj de la:");
+            strcat(table, " ");
+
             for (int i = 0; i < num_fields; i++)
             {
-                if (i == 0)
+                if (i == 1)
                 {
-                    strcat(table, getNameById(atoi(row[0])));
+                    strcat(table, getNameById(atoi(row[1])));
                     strcat(table, "--->");
+                    strcat(table, " ");
                 }
-                else
+                else if (i == 2)
                 {
-                    strcat(table, row[1]);
+                    strcat(table, row[2]);
                 }
             }
             strcat(table, "\n");
         }
-    }
 
-    // updateReadFlag(id);
+        // updateReadFlag(id);
+    }
 
     mysql_free_result(result);
     mysql_close(conn);
@@ -972,8 +986,75 @@ char *offlineMessages(int id)
 
     // printf("%s\n", finalTables);
     // strcpy(returnTable,table);
+    // updateReadFlag(id);
 
     return table;
+}
+
+char *replyToMessage(int idUser, char buffer[], int desc)
+{
+    MYSQL *conn = mysql_init(NULL);
+
+    if (conn == NULL)
+    {
+        fprintf(stderr, "%s\n", mysql_error(conn));
+        exit(1);
+    }
+
+    if (!mysql_real_connect(conn, MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE, 0, NULL, 0))
+    {
+        fprintf(stderr, "%s\n", mysql_error(conn));
+        mysql_close(conn);
+        exit(2);
+    }
+
+    char replymsg[MAXBUFFER];
+    char query[256];
+    char comanda[100];
+    char nume[100];
+    int id = 0;
+
+    write(desc, "flagReply", 9);
+
+    read(desc, &replymsg, sizeof(replymsg));
+
+    sscanf(buffer, "%s %s %i", comanda, nume, &id);
+
+    sprintf(query, "SELECT message FROM messages WHERE id_message = %i and id_sender = %i and id_receiver = %i", id, getUserId(nume), idUser);
+
+    if (mysql_query(conn, query) != 0)
+    {
+        fprintf(stderr, "%s\n", mysql_error(conn));
+        exit(3);
+        mysql_close(conn);
+    }
+
+    MYSQL_RES *result = mysql_store_result(conn);
+
+    if (result == NULL)
+    {
+        printf("Eroare showUsers!\n");
+    }
+
+    // int num_fields = mysql_num_fields(result);
+    char *message = malloc(1000 * sizeof(char *));
+
+    MYSQL_ROW row;
+
+    row = mysql_fetch_row(result);
+
+    strcat(message, getNameById(idUser));
+    strcat(message, " ");
+    strcat(message, "a dat reply la urmatorul mesaj:");
+    strcat(message, " ");
+    strcat(message, row[0]);
+    strcat(message, "\n");
+    strcat(message, "Mesajul primit este:");
+    strcat(message, " ");
+    strcat(message, replymsg);
+    strcat(message, "\n");
+
+    return message;
 }
 
 void response(void *arg)
@@ -982,9 +1063,9 @@ void response(void *arg)
     tdL = *((struct thData *)arg);
 
     char buffer[MAXBUFFER];
-    char buffMSG[MAXBUFFER];
-    char *answer;
-    // char answer[MAXBUFFER];
+    // char buffMSG[MAXBUFFER];
+    // char *answer;
+    //  char answer[MAXBUFFER];
     int idLogin = 0;
     // int count = 0;
     while (1)
@@ -997,7 +1078,9 @@ void response(void *arg)
             perror("Eroare la read()\n");
             // close(tdL.thDesc);
         }
+
         buffer[strlen(buffer)] = '\0';
+
         printf("[Th id: %d] Mesaj de la comandant : %s\n", tdL.idTh, buffer);
         fflush(stdout);
 
@@ -1024,12 +1107,6 @@ void response(void *arg)
                     clients[tdL.idTh]->idUser = idLogin;
                     //  write(tdL.thDesc, "Nume/parola gresit.\n", 21);
                 }
-            }
-            else if (strstr(buffer, "quit"))
-            {
-                // printf("O sa murim\n");
-                pthread_exit(NULL);
-                // exit(EXIT_SUCCESS);
             }
         }
         else
@@ -1068,16 +1145,27 @@ void response(void *arg)
             else if (strcmp(buffer, "offMess") == 0)
             {
                 write(tdL.thDesc, offlineMessages(tdL.idUser), strlen(offlineMessages(tdL.idUser)));
+
+                updateReadFlag(tdL.idUser);
             }
-            else if (strstr(buffer, "quit"))
+            else if (strncmp(buffer, "reply", 5) == 0)
             {
-                // printf("O sa murim\n");
-                pthread_exit(NULL);
-                // exit(EXIT_SUCCESS);
+                write(tdL.thDesc, replyToMessage(tdL.idUser, buffer, tdL.thDesc), strlen(replyToMessage(tdL.idUser, buffer, tdL.thDesc)));
             }
         }
-        // fflush(stdout);
-        // fflush(stdin);
+
+        if (strstr(buffer, "quit") != 0 && tdL.idUser <= -1)
+        {
+            write(tdL.thDesc, "Ai parasit aplicatia cu succes!", 31);
+            printf("Utilizatorul cu id: '%i' a parasit aplicatia cu succes!\n", tdL.idTh);
+            pthread_exit(NULL);
+            // exit(EXIT_SUCCESS);
+        }
+        else if (strstr(buffer, "quit") != 0 && tdL.idUser > -1)
+        {
+            write(tdL.thDesc, "Trebuie sa te folosesti comanda 'logout' inainte de a inchide aplicatia!", 73);
+        }
+
         bzero(buffer, sizeof(buffer));
     }
 }

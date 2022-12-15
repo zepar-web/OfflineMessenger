@@ -35,7 +35,7 @@ void *msgTh(void *socket_desc)
     while (1)
     {
 
-        bzero(buffer, MAX);
+        bzero(buffer, sizeof(buffer));
 
         if (read(sock, buffer, MAX) <= 0)
         {
@@ -66,6 +66,21 @@ void *msgTh(void *socket_desc)
 
             // pthread_kill(th, SIGUSR2);
             //  exit(1);
+        }
+        else if (strncmp(buffer, "Ai parasit aplicatia cu succes!", 31) == 0)
+        {
+            // printf("Ai parasit aplicatia cu succes!\n");
+            // exit(EXIT_SUCCESS);
+        }
+        else if (strcmp(buffer, "flagReply") == 0)
+        {
+            scanf(" %[^\n]s", message);
+
+            write(sock, message, strlen(message));
+
+            printf("Mesaj trimis\n");
+
+            bzero(buffer, sizeof(buffer));
         }
 
         printf("%s\n", buffer);
@@ -137,6 +152,12 @@ int main(int argc, char *argv[])
 
                 write(socketDesc, userData, strlen(userData));
             }
+            else if (strstr(command, "quit") != 0)
+            {
+                write(socketDesc, command, strlen(command));
+                sleep(1);
+                exit(EXIT_SUCCESS);
+            }
             else
             {
                 printf("Nu esti logat.\nDaca nu ai cont foloseste comanda: register.\n");
@@ -152,9 +173,11 @@ int main(int argc, char *argv[])
             else if (strcmp(command, "register") == 0 ||
                      strcmp(command, "login") == 0 ||
                      strcmp(command, "users") == 0 ||
-                     strncmp(command, "msghistory", 10) == 0)
+                     strncmp(command, "msghistory", 10) == 0 ||
+                     strncmp(command, "reply", 5) == 0)
             {
                 write(socketDesc, command, strlen(command));
+                sleep(1);
             }
             else if (strncmp(command, "sendmsgto", 9) == 0)
             {
@@ -162,19 +185,23 @@ int main(int argc, char *argv[])
 
                 sleep(2);
             }
+            else if (strstr(command, "quit") != 0)
+            {
+                write(socketDesc, command, strlen(command));
+                // sleep(2);
+                // exit(EXIT_SUCCESS);
+            }
             else
             {
                 printf("Wrong command\n");
                 fflush(stdout);
             }
-
-            if (strstr(command, "quit"))
-            {
-                write(socketDesc, command, strlen(command));
-
-                exit(EXIT_SUCCESS);
-            }
         }
+        // if (strstr(command, "quit") != 0)
+        // {
+        //     write(socketDesc, command, strlen(command));
+        //     sleep(2);
+        // }
     }
     close(socketDesc);
 }
