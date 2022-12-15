@@ -16,7 +16,7 @@
 
 extern int errno;
 int port;
-#define MAX 500
+#define MAX 1000
 
 int loginFlag = 0;
 pthread_t th;
@@ -49,8 +49,8 @@ void *msgTh(void *socket_desc)
         }
         else if (strcmp(buffer, "Te-ai conectat cu succes!\n") == 0)
         {
-            offlineMesseges(sock);
             loginFlag = 1;
+            offlineMesseges(sock);
         }
         else if (strncmp(buffer, "esteOnline", 10) == 0 || strncmp(buffer, "Utilizatorul", 12) == 0)
         {
@@ -72,8 +72,10 @@ void *msgTh(void *socket_desc)
             // printf("Ai parasit aplicatia cu succes!\n");
             // exit(EXIT_SUCCESS);
         }
-        else if (strcmp(buffer, "flagReply") == 0)
+        else if (strncmp(buffer, "replyFlag", 9) == 0 || strncmp(buffer, "Utilizatorul", 12) == 0)
         {
+            // printf("Ce ganduri si sentimente doresti sa impartasesti?\n");
+
             scanf(" %[^\n]s", message);
 
             write(sock, message, strlen(message));
@@ -81,6 +83,9 @@ void *msgTh(void *socket_desc)
             printf("Mesaj trimis\n");
 
             bzero(buffer, sizeof(buffer));
+
+            // pthread_kill(th, SIGUSR2);
+            //  exit(1);
         }
 
         printf("%s\n", buffer);
@@ -109,6 +114,7 @@ int main(int argc, char *argv[])
 
         return errno;
     }
+
     server.sin_family = AF_INET;
     server.sin_addr.s_addr = inet_addr(argv[1]);
     server.sin_port = htons(port);
@@ -120,6 +126,7 @@ int main(int argc, char *argv[])
     }
 
     char command[MAX];
+    // char command2[MAX];
     char username[100];
     char password[100];
     char userData[1000];
@@ -131,10 +138,10 @@ int main(int argc, char *argv[])
         fflush(stdin);
         fflush(stdout);
 
+        // scanf("%s", command);
         bzero(command, sizeof(command));
 
         scanf(" %[^\n]s", command);
-        // scanf("%s", command);
 
         int sock2 = socketDesc;
         pthread_create(&th, NULL, &msgTh, (void *)&sock2);
@@ -173,13 +180,18 @@ int main(int argc, char *argv[])
             else if (strcmp(command, "register") == 0 ||
                      strcmp(command, "login") == 0 ||
                      strcmp(command, "users") == 0 ||
-                     strncmp(command, "msghistory", 10) == 0 ||
-                     strncmp(command, "reply", 5) == 0)
+                     strncmp(command, "msghistory", 10) == 0)
             {
                 write(socketDesc, command, strlen(command));
-                sleep(1);
+                // sleep(1);
             }
             else if (strncmp(command, "sendmsgto", 9) == 0)
+            {
+                write(socketDesc, command, strlen(command));
+
+                sleep(2);
+            }
+            else if (strncmp(command, "reply", 5) == 0)
             {
                 write(socketDesc, command, strlen(command));
 
@@ -197,11 +209,6 @@ int main(int argc, char *argv[])
                 fflush(stdout);
             }
         }
-        // if (strstr(command, "quit") != 0)
-        // {
-        //     write(socketDesc, command, strlen(command));
-        //     sleep(2);
-        // }
     }
     close(socketDesc);
 }

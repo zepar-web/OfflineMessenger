@@ -937,7 +937,7 @@ char *offlineMessages(int id)
     int num_fields = mysql_num_fields(result);
 
     char *table = malloc(1000 * sizeof(char *));
-    
+
     bzero(table, sizeof(table));
 
     if (countOfflineMessages(id) == 0)
@@ -991,7 +991,53 @@ char *offlineMessages(int id)
     return table;
 }
 
-char *replyToMessage(int idUser, char buffer[], int desc)
+int verifyMessage(int idMesaj)
+{
+    MYSQL *conn = mysql_init(NULL);
+
+    if (conn == NULL)
+    {
+        fprintf(stderr, "%s\n", mysql_error(conn));
+        exit(1);
+    }
+
+    if (!mysql_real_connect(conn, MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE, 0, NULL, 0))
+    {
+        fprintf(stderr, "%s\n", mysql_error(conn));
+        exit(2);
+    }
+
+    char query[256];
+    sprintf(query, "SELECT * FROM messages WHERE id_message = '%i'", idMesaj);
+
+    if (mysql_query(conn, query))
+    {
+        fprintf(stderr, "%s\n", mysql_error(conn));
+        mysql_close(conn);
+    }
+
+    MYSQL_RES *result = mysql_store_result(conn);
+
+    if (mysql_num_rows(result) > 0)
+    {
+        // message exist
+        mysql_close(conn);
+        return 1;
+    }
+    else
+    {
+        // message does not exist
+        mysql_close(conn);
+        return 0;
+    }
+
+    mysql_free_result(result);
+    mysql_close(conn);
+
+    return 0;
+}
+
+char *selectMessageFromDB(int idMessage)
 {
     MYSQL *conn = mysql_init(NULL);
 
@@ -1008,19 +1054,8 @@ char *replyToMessage(int idUser, char buffer[], int desc)
         exit(2);
     }
 
-    char replymsg[MAXBUFFER];
     char query[256];
-    char comanda[100];
-    char nume[100];
-    int id = 0;
-
-    write(desc, "flagReply", 9);
-
-    read(desc, &replymsg, sizeof(replymsg));
-
-    sscanf(buffer, "%s %s %i", comanda, nume, &id);
-
-    sprintf(query, "SELECT message FROM messages WHERE id_message = %i and id_sender = %i and id_receiver = %i", id, getUserId(nume), idUser);
+    sprintf(query, "SELECT message FROM messages WHERE id_message = %i", idMessage);
 
     if (mysql_query(conn, query) != 0)
     {
@@ -1036,25 +1071,105 @@ char *replyToMessage(int idUser, char buffer[], int desc)
         printf("Eroare showUsers!\n");
     }
 
-    // int num_fields = mysql_num_fields(result);
-    char *message = malloc(1000 * sizeof(char *));
+    int num_fields = mysql_num_fields(result);
+    char *tables = malloc(1000 * sizeof(char *));
 
     MYSQL_ROW row;
 
-    row = mysql_fetch_row(result);
+    while ((row = mysql_fetch_row(result)))
+    {
+        for (int i = 0; i < num_fields; i++)
+        {
+            strcat(tables, row[i]);
+            strcat(tables, " ");
+        }
+        // strcat(tables, "\n");
+    }
+    mysql_free_result(result);
+    mysql_close(conn);
 
-    strcat(message, getNameById(idUser));
-    strcat(message, " ");
-    strcat(message, "a dat reply la urmatorul mesaj:");
-    strcat(message, " ");
-    strcat(message, row[0]);
-    strcat(message, "\n");
-    strcat(message, "Mesajul primit este:");
-    strcat(message, " ");
-    strcat(message, replymsg);
-    strcat(message, "\n");
+    // printf("%i\n",userId);
+    fflush(stdout);
 
-    return message;
+    // printf("*%s*\n",tables);
+
+    return tables;
+}
+
+void replyMessage(int desc, thData th, char buffer[], int idUser)
+{
+    printf("am intrat in sendmsg\n");
+    char nume[100] = "";
+    char comanda[100] = "";
+    char messageRead[500] = "";
+    char warning[5000] = "";
+    char toSend[1000] = "";
+    int clientDesc;
+    int idMessage = 0;
+
+    bzero(nume,sizeof(nume));
+
+    sscanf(buffer, "%s %s %i", comanda, nume, &idMessage);
+
+    printf("%s\n", nume);
+
+    if (verifyUser(nume) == 1 && verifyMessage(idMessage) == 1)
+    {
+        printf("am verificat\n");
+        if (isOnline(nume) == true)
+        {
+            write(desc, "replyFlag", 9);
+
+            read(desc, messageRead, sizeof(messageRead));
+
+            // sprintf(toSend, "Mesaj de la %s: ", getNameById(th.idUser));
+
+            // strcat(toSend, messageRead);
+            bzero(toSend,sizeof(toSend));
+
+            strcat(toSend, getNameById(idUser));
+            strcat(toSend, " ");
+            strcat(toSend, "a dat reply la urmatorul mesaj:");
+            strcat(toSend, " ");
+            strcat(toSend, selectMessageFromDB(idMessage));
+            strcat(toSend, "\n");
+            strcat(toSend, "Mesajul primit este:");
+            strcat(toSend, " ");
+            strcat(toSend, messageRead);
+            strcat(toSend, "\n");
+
+            printf("%s\n", messageRead);
+
+            for (int i = 0; i < clientNumbers; i++)
+            {
+                if (clients[i]->idUser == getUserId(nume))
+                {
+                    clientDesc = clients[i]->thDesc;
+                    // printf("%i\n", clientDesc);
+                    // printf("Am gasit\n");
+                    write(clientDesc, toSend, strlen(toSend));
+                    insertOnlineMesssageIntoDataBase(th.idUser, getUserId(nume), messageRead);
+                    printf("Am trimis\n");
+                }
+            }
+        }
+        else if (isOnline(nume) == false)
+        {
+            sprintf(warning, "Utilizatorul '%s' nu este online.\nMesajul trimis o sa il primeasca cand se conecteaza!", nume);
+            write(desc, warning, strlen(warning));
+
+            read(desc, messageRead, sizeof(messageRead));
+
+            printf("%s\n", messageRead);
+
+            insertOfflineMesssageIntoDataBase(th.idUser, getUserId(nume), messageRead);
+        }
+    }
+    else
+    {
+        strcpy(warning, "Nume sau id mesaj gresit!");
+        write(desc, warning, strlen(warning));
+    }
 }
 
 void response(void *arg)
@@ -1150,7 +1265,7 @@ void response(void *arg)
             }
             else if (strncmp(buffer, "reply", 5) == 0)
             {
-                write(tdL.thDesc, replyToMessage(tdL.idUser, buffer, tdL.thDesc), strlen(replyToMessage(tdL.idUser, buffer, tdL.thDesc)));
+                replyMessage(tdL.thDesc,tdL,buffer,tdL.idUser);
             }
         }
 
