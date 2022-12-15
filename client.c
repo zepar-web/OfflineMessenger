@@ -21,6 +21,11 @@ int port;
 int loginFlag = 0;
 pthread_t th;
 
+void offlineMesseges(int desc)
+{
+    write(desc, "offMess", 7);
+}
+
 void *msgTh(void *socket_desc)
 {
 
@@ -44,6 +49,7 @@ void *msgTh(void *socket_desc)
         }
         else if (strcmp(buffer, "Te-ai conectat cu succes!\n") == 0)
         {
+            offlineMesseges(sock);
             loginFlag = 1;
         }
         else if (strncmp(buffer, "esteOnline", 10) == 0 || strncmp(buffer, "Utilizatorul", 12) == 0)
@@ -110,8 +116,8 @@ int main(int argc, char *argv[])
         fflush(stdin);
         fflush(stdout);
 
-        bzero(command,sizeof(command));
-        
+        bzero(command, sizeof(command));
+
         scanf(" %[^\n]s", command);
         // scanf("%s", command);
 

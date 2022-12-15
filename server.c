@@ -10,6 +10,7 @@
 #include <pthread.h>
 #include <stdlib.h>
 #include <mysql/mysql.h>
+
 #define PORT 3005
 #define MAXBUFFER 100
 #define MYSQL_HOST "localhost"
@@ -303,23 +304,6 @@ int Login(int desc, thData th)
         fflush(stdout);
 
         return userId;
-
-        // if (!(row = mysql_fetch_row(result)))
-        // {
-        //     return -1;
-        // }
-        // else
-        // {
-        //     userId = atoi(row[0]);
-        //     clients[th.idTh]->idUser = userId;
-
-        //     // write(desc, "Te-ai logat cu succes!", 23);
-        //     mysql_free_result(result);
-
-        //     mysql_close(conn);
-
-        //     return userId;
-        // }
     }
     else
     {
@@ -824,6 +808,174 @@ char *showMessageHistory(char buffer[], int idUser)
     return table;
 }
 
+void updateReadFlag(int id)
+{
+    MYSQL *conn = mysql_init(NULL);
+
+    if (conn == NULL)
+    {
+        fprintf(stderr, "%s\n", mysql_error(conn));
+        exit(1);
+    }
+
+    if (!mysql_real_connect(conn, MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE, 0, NULL, 0))
+    {
+        fprintf(stderr, "%s\n", mysql_error(conn));
+        mysql_close(conn);
+        exit(2);
+    }
+
+    char query[256];
+
+    sprintf(query, "UPDATE messages SET is_read = 1 WHERE id_receiver = %i", id);
+
+    if (mysql_query(conn, query) != 0)
+    {
+        fprintf(stderr, "%s\n", mysql_error(conn));
+        exit(3);
+        mysql_close(conn);
+    }
+    mysql_close(conn);
+}
+
+int countOfflineMessages(int id)
+{
+    MYSQL *conn = mysql_init(NULL);
+
+    if (conn == NULL)
+    {
+        fprintf(stderr, "%s\n", mysql_error(conn));
+        exit(1);
+    }
+
+    if (!mysql_real_connect(conn, MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE, 0, NULL, 0))
+    {
+        fprintf(stderr, "%s\n", mysql_error(conn));
+        mysql_close(conn);
+        exit(2);
+    }
+
+    char query[256];
+    int messagesCount = 0;
+
+    sprintf(query, "SELECT count(is_read) FROM messages WHERE is_read = 0 AND id_receiver = %i", id);
+
+    if (mysql_query(conn, query) != 0)
+    {
+        fprintf(stderr, "%s\n", mysql_error(conn));
+        exit(3);
+        mysql_close(conn);
+    }
+
+    MYSQL_RES *result = mysql_store_result(conn);
+
+    if (result == NULL)
+    {
+        printf("Eroare login!\n");
+        return -1;
+    }
+
+    MYSQL_ROW row = mysql_fetch_row(result);
+
+    if (row == NULL)
+    {
+        return -1;
+    }
+
+    messagesCount = atoi(row[0]);
+
+    mysql_free_result(result);
+    mysql_close(conn);
+
+    return messagesCount;
+}
+
+char *offlineMessages(int id)
+{
+    MYSQL *conn = mysql_init(NULL);
+
+    if (conn == NULL)
+    {
+        fprintf(stderr, "%s\n", mysql_error(conn));
+        exit(1);
+    }
+
+    if (!mysql_real_connect(conn, MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE, 0, NULL, 0))
+    {
+        fprintf(stderr, "%s\n", mysql_error(conn));
+        mysql_close(conn);
+        exit(2);
+    }
+
+    char query[256];
+
+    sprintf(query, "SELECT id_sender, message FROM messages WHERE id_receiver = %i and is_read = 0", id);
+
+    if (mysql_query(conn, query) != 0)
+    {
+        fprintf(stderr, "%s\n", mysql_error(conn));
+        exit(3);
+        mysql_close(conn);
+    }
+
+    MYSQL_RES *result = mysql_store_result(conn);
+
+    if (result == NULL)
+    {
+        printf("Eroare showUsers!\n");
+    }
+
+    MYSQL_ROW row;
+
+    int num_fields = mysql_num_fields(result);
+
+    char *table = malloc(1000 * sizeof(char *))
+    ;
+    bzero(table, sizeof(table));
+
+    if (countOfflineMessages(id) == 0)
+    {
+        strcat(table, "Cat timp ai fost offline nu ai primit niciun mesaj!\n\n");
+    }
+    else
+    {
+        strcat(table, "Mesaje primite cat timp ai fost Offline\n\n");
+
+        while ((row = mysql_fetch_row(result)))
+        {
+            strcat(table, "Mesaj de la: ");
+            for (int i = 0; i < num_fields; i++)
+            {
+                if (i == 0)
+                {
+                    strcat(table, getNameById(atoi(row[0])));
+                    strcat(table, "--->");
+                }
+                else
+                {
+                    strcat(table, row[1]);
+                }
+            }
+            strcat(table, "\n");
+        }
+    }
+
+    // updateReadFlag(id);
+
+    mysql_free_result(result);
+    mysql_close(conn);
+
+    // printf("%i\n",userId);
+    fflush(stdout);
+
+    // printf("%s\n",table);
+
+    // printf("%s\n", finalTables);
+    // strcpy(returnTable,table);
+
+    return table;
+}
+
 void response(void *arg)
 {
     struct thData tdL;
@@ -912,6 +1064,10 @@ void response(void *arg)
             else if (strncmp(buffer, "msghistory", 10) == 0)
             {
                 write(tdL.thDesc, showMessageHistory(buffer, tdL.idUser), strlen(showMessageHistory(buffer, tdL.idUser)));
+            }
+            else if (strcmp(buffer, "offMess") == 0)
+            {
+                write(tdL.thDesc, offlineMessages(tdL.idUser), strlen(offlineMessages(tdL.idUser)));
             }
             else if (strstr(buffer, "quit"))
             {
