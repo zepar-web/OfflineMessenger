@@ -43,7 +43,7 @@ void response(void *);
 
 // }
 
-//TODO
+// TODO
 int main()
 {
     // MYSQL *conn = mysql_init(NULL);
@@ -274,7 +274,7 @@ int Login(int desc, thData th)
 
     bzero(username, sizeof(username));
     bzero(password, sizeof(password));
-    bzero(userData,sizeof(userData));
+    bzero(userData, sizeof(userData));
     // bzero(answer, sizeof(answer));
     fflush(stdin);
     fflush(stdout);
@@ -429,7 +429,7 @@ char *showUsers()
     }
 
     char query[256];
-    strcpy(query, "SELECT name,loginflag FROM users");
+    strcpy(query, "SELECT id, name, loginflag FROM users");
 
     if (mysql_query(conn, query) != 0)
     {
@@ -454,8 +454,32 @@ char *showUsers()
     {
         for (int i = 0; i < num_fields; i++)
         {
-            strcat(tables, row[i]);
-            strcat(tables, " ");
+
+            if (i == 0)
+            {
+                strcat(tables,"(");
+                strcat(tables,row[0]);
+                strcat(tables,")");
+                strcat(tables," ");
+            }
+            else if (i == 1)
+            {
+                strcat(tables, row[1]);
+                strcat(tables," ");
+                strcat(tables, "->");
+                strcat(tables," ");
+            }
+            else if (i == 2)
+            {
+                if (atoi(row[2]) == 0)
+                {
+                    strcat(tables, "OFFLINE");
+                }
+                else
+                {
+                    strcat(tables, "ONLINE");
+                }
+            }
         }
         strcat(tables, "\n");
     }
@@ -669,6 +693,7 @@ char *getNameById(int id)
 
     int num_fields = mysql_num_fields(result);
     char *tables = malloc(1000 * sizeof(char *));
+    bzero(tables,sizeof(tables));
 
     MYSQL_ROW row;
 
@@ -1129,11 +1154,16 @@ void replyMessage(int desc, thData th, char buffer[], int idUser)
     int clientDesc;
     int idMessage = 0;
 
+    bzero(toSend, sizeof(toSend));
     bzero(nume, sizeof(nume));
 
     sscanf(buffer, "%s %s %i", comanda, nume, &idMessage);
 
     printf("%s\n", nume);
+
+    char nameIdUser[100] = "";
+
+    memcpy(nameIdUser,getNameById(idUser),strlen(getNameById(idUser)));
 
     if (verifyUser(nume) == 1 && verifyMessage(idMessage) == 1)
     {
@@ -1147,10 +1177,8 @@ void replyMessage(int desc, thData th, char buffer[], int idUser)
             // sprintf(toSend, "Mesaj de la %s: ", getNameById(th.idUser));
 
             // strcat(toSend, messageRead);
-            bzero(toSend, sizeof(toSend));
 
-            strcat(toSend, getNameById(idUser));
-            strcat(toSend, " ");
+            strcat(toSend, nameIdUser);
             strcat(toSend, "a dat reply la urmatorul mesaj:");
             strcat(toSend, " ");
             strcat(toSend, selectMessageFromDB(idMessage));

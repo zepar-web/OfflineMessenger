@@ -53,9 +53,9 @@ void *msgTh(void *socket_desc)
             loginFlag = 1;
             offlineMesseges(sock);
         }
-        else if (strncmp(buffer, "esteOnline", 10) == 0 || strncmp(buffer, "Utilizatorul", 12) == 0)
+        else if (strncmp(buffer, "esteOnline", 10) == 0)
         {
-            printf("Ce ganduri si sentimente doresti sa impartasesti?\n");
+            //printf("Ce ganduri si sentimente doresti sa impartasesti?\n");
 
             scanf(" %[^\n]s", message);
 
@@ -73,7 +73,7 @@ void *msgTh(void *socket_desc)
             // printf("Ai parasit aplicatia cu succes!\n");
             // exit(EXIT_SUCCESS);
         }
-        else if (strncmp(buffer, "replyFlag", 9) == 0 || strncmp(buffer, "Utilizatorul", 12) == 0)
+        else if (strncmp(buffer, "replyFlag", 9) == 0)
         {
             // printf("Ce ganduri si sentimente doresti sa impartasesti?\n");
 
@@ -87,6 +87,14 @@ void *msgTh(void *socket_desc)
 
             // pthread_kill(th, SIGUSR2);
             //  exit(1);
+        }
+        else if (strncmp(buffer, "Utilizatorul", 12) == 0)
+        {
+            scanf(" %[^\n]s", message);
+
+            write(sock, message, strlen(message));
+
+            printf("Mesaj trimis\n");
         }
 
         printf("%s\n", buffer);
@@ -140,12 +148,12 @@ int main(int argc, char *argv[])
         fflush(stdout);
 
         // scanf("%s", command);
+        int sock2 = socketDesc;
+        pthread_create(&th, NULL, &msgTh, (void *)&sock2);
+
         bzero(command, sizeof(command));
 
         scanf(" %[^\n]s", command);
-
-        int sock2 = socketDesc;
-        pthread_create(&th, NULL, &msgTh, (void *)&sock2);
 
         if (loginFlag == 0)
         {
@@ -206,7 +214,9 @@ int main(int argc, char *argv[])
             }
             else
             {
-                printf("Wrong command\n");
+                printf("WRONG COMMAND!!\n");
+                printf("Comenzi disponibile!\n");
+                printf("1.users\n2.msghistory <name>\n3.sendmsgto <name>\n4.reply <name> <messageId>\n5.logout\n6.quit\n\n");
                 fflush(stdout);
             }
         }
