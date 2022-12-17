@@ -136,7 +136,7 @@ int main()
         {
             printf("Eroare creare tabele!\n");
         }
-        
+
         printf("Baza de date creata cu succes!\n");
     }
 
@@ -773,7 +773,7 @@ char *getNameById(int id)
 
     int num_fields = mysql_num_fields(result);
     char *tables = malloc(1000 * sizeof(char *));
-    bzero(tables, sizeof(tables));
+    bzero(tables, strlen(tables));
 
     MYSQL_ROW row;
 
@@ -902,8 +902,10 @@ char *showMessageHistory(char buffer[], int idUser)
     MYSQL_ROW row;
 
     char *table = malloc(1000 * sizeof(char *));
-    bzero(table, sizeof(table));
+    bzero(table, strlen(table));
+
     strcat(table, "Istoric mesaje!\n");
+
     while ((row = mysql_fetch_row(result)))
     {
         strcat(table, "(MsgId:");
@@ -1065,7 +1067,7 @@ char *offlineMessages(int id)
 
     char *table = malloc(1000 * sizeof(char *));
 
-    bzero(table, sizeof(table));
+    bzero(table, strlen(table));
 
     if (countOfflineMessages(id) == 0)
     {
@@ -1302,6 +1304,72 @@ void replyMessage(int desc, thData th, char buffer[], int idUser)
     }
 }
 
+void changeUsername(char buffer[], int idUser)
+{
+    MYSQL *conn = mysql_init(NULL);
+
+    if (conn == NULL)
+    {
+        fprintf(stderr, "%s\n", mysql_error(conn));
+        exit(1);
+    }
+
+    if (!mysql_real_connect(conn, MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE, 0, NULL, 0))
+    {
+        fprintf(stderr, "%s\n", mysql_error(conn));
+        mysql_close(conn);
+        exit(2);
+    }
+
+    char query[256];
+    char comanda[100];
+    char nume[100];
+
+    sscanf(buffer, "%s %s", comanda, nume);
+
+    sprintf(query, "UPDATE users SET name = '%s' WHERE id = %i", nume, idUser);
+
+    if (mysql_query(conn, query) != 0)
+    {
+        fprintf(stderr, "%s\n", mysql_error(conn));
+        exit(3);
+        mysql_close(conn);
+    }
+}
+
+void changePassword(char buffer[], int idUser)
+{
+    MYSQL *conn = mysql_init(NULL);
+
+    if (conn == NULL)
+    {
+        fprintf(stderr, "%s\n", mysql_error(conn));
+        exit(1);
+    }
+
+    if (!mysql_real_connect(conn, MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE, 0, NULL, 0))
+    {
+        fprintf(stderr, "%s\n", mysql_error(conn));
+        mysql_close(conn);
+        exit(2);
+    }
+
+    char query[256];
+    char comanda[100];
+    char parola[100];
+
+    sscanf(buffer, "%s %s", comanda, parola);
+
+    sprintf(query, "UPDATE users SET password = '%s' WHERE id = %i", parola, idUser);
+
+    if (mysql_query(conn, query) != 0)
+    {
+        fprintf(stderr, "%s\n", mysql_error(conn));
+        exit(3);
+        mysql_close(conn);
+    }
+}
+
 void response(void *arg)
 {
     struct thData tdL;
@@ -1396,6 +1464,16 @@ void response(void *arg)
             else if (strncmp(buffer, "reply", 5) == 0)
             {
                 replyMessage(tdL.thDesc, tdL, buffer, tdL.idUser);
+            }
+            else if (strncmp(buffer, "setnameto", 9) == 0)
+            {
+                changeUsername(buffer, tdL.idUser);
+                write(tdL.thDesc, "Ti-ai schimbat numele cu succes!", 32);
+            }
+            else if (strncmp(buffer, "setpassto", 9) == 0)
+            {
+                changePassword(buffer, tdL.idUser);
+                write(tdL.thDesc, "Ti-ai schimbat parola cu succes!", 32);
             }
         }
 
