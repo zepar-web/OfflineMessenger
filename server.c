@@ -38,27 +38,107 @@ static void *treat(void *);
 
 void response(void *);
 
-// int verifyDatabase(MYSQL *conn,char *db_name)
-// {
+int verifyDatabase(MYSQL *conn, char *db_name)
+{
+    char query[256];
 
-// }
+    sprintf(query, "SHOW DATABASES LIKE '%s'", db_name);
 
-// TODO
+    if (mysql_query(conn, query))
+    {
+        printf("Err:Checking db: %s\n", mysql_error(conn));
+        return 0;
+    }
+
+    MYSQL_RES *result = mysql_store_result(conn);
+
+    int num_rows = mysql_num_rows(result);
+
+    return num_rows > 0;
+}
+
+void createDatabase(MYSQL *conn, char *db_name)
+{
+    char query[256];
+
+    sprintf(query, "CREATE DATABASE %s", db_name);
+
+    if (mysql_query(conn, query))
+    {
+        printf("Err:Checking db: %s\n", mysql_error(conn));
+    }
+}
+
+int createUserTable(MYSQL *conn, char *tableName)
+{
+    char query[256];
+
+    sprintf(query, "CREATE TABLE %s ( id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(256) NOT NULL, password VARCHAR(256) NOT NULL, loginflag INT NOT NULL DEFAULT 0)", tableName);
+
+    if (mysql_query(conn, query))
+    {
+        printf("Err:Checking db: %s\n", mysql_error(conn));
+        return -1;
+    }
+
+    return 0;
+}
+
+int createMessagesTable(MYSQL *conn, char *tableName)
+{
+    char query[500];
+
+    sprintf(query, "CREATE TABLE %s (id_sender INT NOT NULL, id_receiver INT NOT NULL, is_read TINYINT NOT NULL DEFAULT 0, message VARCHAR(255) NOT NULL, id_message INT AUTO_INCREMENT PRIMARY KEY, FOREIGN KEY (id_sender) REFERENCES users(id), FOREIGN KEY (id_receiver) REFERENCES users(id))", tableName);
+
+    if (mysql_query(conn, query))
+    {
+        fprintf(stderr, "%s\n", mysql_error(conn));
+        return -1;
+    }
+
+    return 0;
+}
+
 int main()
 {
-    // MYSQL *conn = mysql_init(NULL);
+    MYSQL *conn = mysql_init(NULL);
 
-    // if (conn == NULL)
-    // {
-    //     fprintf(stderr, "%s\n", mysql_error(conn));
-    //     exit(1);
-    // }
+    if (conn == NULL)
+    {
+        fprintf(stderr, "%s\n", mysql_error(conn));
+        exit(1);
+    }
 
-    // if (!mysql_real_connect(conn, MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE, 0, NULL, 0))
-    // {
-    //     fprintf(stderr, "%s\n", mysql_error(conn));
-    //     exit(2);
-    // }
+    if (!mysql_real_connect(conn, MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, NULL, 0, NULL, 0))
+    {
+        fprintf(stderr, "%s\n", mysql_error(conn));
+    }
+
+    if (verifyDatabase(conn, "offmess"))
+    {
+        printf("Conectare reusita la baza de date!\n");
+    }
+    else
+    {
+        createDatabase(conn, "offmess");
+
+        if (mysql_select_db(conn, "offmess"))
+        {
+            fprintf(stderr, "%s\n", mysql_error(conn));
+        }
+
+        if (createUserTable(conn, "users") < 0)
+        {
+            printf("Eroare creare tabele!\n");
+        }
+
+        if (createMessagesTable(conn, "messages") < 0)
+        {
+            printf("Eroare creare tabele!\n");
+        }
+        
+        printf("Baza de date creata cu succes!\n");
+    }
 
     struct sockaddr_in server;
     struct sockaddr_in client2server;
@@ -457,17 +537,17 @@ char *showUsers()
 
             if (i == 0)
             {
-                strcat(tables,"(");
-                strcat(tables,row[0]);
-                strcat(tables,")");
-                strcat(tables," ");
+                strcat(tables, "(");
+                strcat(tables, row[0]);
+                strcat(tables, ")");
+                strcat(tables, " ");
             }
             else if (i == 1)
             {
                 strcat(tables, row[1]);
-                strcat(tables," ");
+                strcat(tables, " ");
                 strcat(tables, "->");
-                strcat(tables," ");
+                strcat(tables, " ");
             }
             else if (i == 2)
             {
@@ -693,7 +773,7 @@ char *getNameById(int id)
 
     int num_fields = mysql_num_fields(result);
     char *tables = malloc(1000 * sizeof(char *));
-    bzero(tables,sizeof(tables));
+    bzero(tables, sizeof(tables));
 
     MYSQL_ROW row;
 
@@ -1163,7 +1243,7 @@ void replyMessage(int desc, thData th, char buffer[], int idUser)
 
     char nameIdUser[100] = "";
 
-    memcpy(nameIdUser,getNameById(idUser),strlen(getNameById(idUser)));
+    memcpy(nameIdUser, getNameById(idUser), strlen(getNameById(idUser)));
 
     if (verifyUser(nume) == 1 && verifyMessage(idMessage) == 1)
     {
