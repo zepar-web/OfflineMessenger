@@ -53,9 +53,9 @@ void *msgTh(void *socket_desc)
             loginFlag = 1;
             offlineMesseges(sock);
         }
-        else if (strncmp(buffer, "esteOnline", 10) == 0 || strncmp(buffer, "Utilizatorul", 12) == 0)
+        else if (strncmp(buffer, "esteOnline", 10) == 0)
         {
-            printf("Ce ganduri si sentimente doresti sa impartasesti?\n");
+            printf("Mesaj:\n");
 
             scanf(" %[^\n]s", message);
 
@@ -73,9 +73,9 @@ void *msgTh(void *socket_desc)
             // printf("Ai parasit aplicatia cu succes!\n");
             // exit(EXIT_SUCCESS);
         }
-        else if (strncmp(buffer, "replyFlag", 9) == 0 || strncmp(buffer, "Utilizatorul", 12) == 0)
+        else if (strncmp(buffer, "replyFlag", 9) == 0)
         {
-            // printf("Ce ganduri si sentimente doresti sa impartasesti?\n");
+            printf("Mesaj:\n");
 
             scanf(" %[^\n]s", message);
 
@@ -87,6 +87,16 @@ void *msgTh(void *socket_desc)
 
             // pthread_kill(th, SIGUSR2);
             //  exit(1);
+        }
+        else if (strncmp(buffer, "Utilizatorul", 12) == 0)
+        {
+            printf("Mesaj:\n");
+
+            scanf(" %[^\n]s", message);
+
+            write(sock, message, strlen(message));
+
+            printf("Mesaj trimis\n");
         }
 
         printf("%s\n", buffer);
@@ -140,12 +150,12 @@ int main(int argc, char *argv[])
         fflush(stdout);
 
         // scanf("%s", command);
+        int sock2 = socketDesc;
+        pthread_create(&th, NULL, &msgTh, (void *)&sock2);
+
         bzero(command, sizeof(command));
 
         scanf(" %[^\n]s", command);
-
-        int sock2 = socketDesc;
-        pthread_create(&th, NULL, &msgTh, (void *)&sock2);
 
         if (loginFlag == 0)
         {
@@ -181,7 +191,9 @@ int main(int argc, char *argv[])
             else if (strcmp(command, "register") == 0 ||
                      strcmp(command, "login") == 0 ||
                      strcmp(command, "users") == 0 ||
-                     strncmp(command, "msghistory", 10) == 0)
+                     strncmp(command, "msghistory", 10) == 0 ||
+                     strncmp(command, "setnameto", 9) == 0 ||
+                     strncmp(command, "setpassto", 9) == 0)
             {
                 write(socketDesc, command, strlen(command));
                 // sleep(1);
@@ -206,7 +218,9 @@ int main(int argc, char *argv[])
             }
             else
             {
-                printf("Wrong command\n");
+                printf("WRONG COMMAND!!\n");
+                printf("Comenzi disponibile!\n");
+                printf("1.users\n2.msghistory <name>\n3.sendmsgto <name>\n4.reply <name> <messageId>\n5.setnameto <name>\n6.setpassto <name>\n7.logout\n8.quit\n\n");
                 fflush(stdout);
             }
         }

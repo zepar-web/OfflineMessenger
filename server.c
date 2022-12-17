@@ -38,27 +38,107 @@ static void *treat(void *);
 
 void response(void *);
 
-// int verifyDatabase(MYSQL *conn,char *db_name)
-// {
+int verifyDatabase(MYSQL *conn, char *db_name)
+{
+    char query[256];
 
-// }
+    sprintf(query, "SHOW DATABASES LIKE '%s'", db_name);
 
-//TODO
+    if (mysql_query(conn, query))
+    {
+        printf("Err:Checking db: %s\n", mysql_error(conn));
+        return 0;
+    }
+
+    MYSQL_RES *result = mysql_store_result(conn);
+
+    int num_rows = mysql_num_rows(result);
+
+    return num_rows > 0;
+}
+
+void createDatabase(MYSQL *conn, char *db_name)
+{
+    char query[256];
+
+    sprintf(query, "CREATE DATABASE %s", db_name);
+
+    if (mysql_query(conn, query))
+    {
+        printf("Err:Checking db: %s\n", mysql_error(conn));
+    }
+}
+
+int createUserTable(MYSQL *conn, char *tableName)
+{
+    char query[256];
+
+    sprintf(query, "CREATE TABLE %s ( id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(256) NOT NULL, password VARCHAR(256) NOT NULL, loginflag INT NOT NULL DEFAULT 0)", tableName);
+
+    if (mysql_query(conn, query))
+    {
+        printf("Err:Checking db: %s\n", mysql_error(conn));
+        return -1;
+    }
+
+    return 0;
+}
+
+int createMessagesTable(MYSQL *conn, char *tableName)
+{
+    char query[500];
+
+    sprintf(query, "CREATE TABLE %s (id_sender INT NOT NULL, id_receiver INT NOT NULL, is_read TINYINT NOT NULL DEFAULT 0, message VARCHAR(255) NOT NULL, id_message INT AUTO_INCREMENT PRIMARY KEY, FOREIGN KEY (id_sender) REFERENCES users(id), FOREIGN KEY (id_receiver) REFERENCES users(id))", tableName);
+
+    if (mysql_query(conn, query))
+    {
+        fprintf(stderr, "%s\n", mysql_error(conn));
+        return -1;
+    }
+
+    return 0;
+}
+
 int main()
 {
-    // MYSQL *conn = mysql_init(NULL);
+    MYSQL *conn = mysql_init(NULL);
 
-    // if (conn == NULL)
-    // {
-    //     fprintf(stderr, "%s\n", mysql_error(conn));
-    //     exit(1);
-    // }
+    if (conn == NULL)
+    {
+        fprintf(stderr, "%s\n", mysql_error(conn));
+        exit(1);
+    }
 
-    // if (!mysql_real_connect(conn, MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE, 0, NULL, 0))
-    // {
-    //     fprintf(stderr, "%s\n", mysql_error(conn));
-    //     exit(2);
-    // }
+    if (!mysql_real_connect(conn, MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, NULL, 0, NULL, 0))
+    {
+        fprintf(stderr, "%s\n", mysql_error(conn));
+    }
+
+    if (verifyDatabase(conn, "offmess"))
+    {
+        printf("Conectare reusita la baza de date!\n");
+    }
+    else
+    {
+        createDatabase(conn, "offmess");
+
+        if (mysql_select_db(conn, "offmess"))
+        {
+            fprintf(stderr, "%s\n", mysql_error(conn));
+        }
+
+        if (createUserTable(conn, "users") < 0)
+        {
+            printf("Eroare creare tabele!\n");
+        }
+
+        if (createMessagesTable(conn, "messages") < 0)
+        {
+            printf("Eroare creare tabele!\n");
+        }
+
+        printf("Baza de date creata cu succes!\n");
+    }
 
     struct sockaddr_in server;
     struct sockaddr_in client2server;
@@ -274,7 +354,7 @@ int Login(int desc, thData th)
 
     bzero(username, sizeof(username));
     bzero(password, sizeof(password));
-    bzero(userData,sizeof(userData));
+    bzero(userData, sizeof(userData));
     // bzero(answer, sizeof(answer));
     fflush(stdin);
     fflush(stdout);
@@ -429,7 +509,7 @@ char *showUsers()
     }
 
     char query[256];
-    strcpy(query, "SELECT name,loginflag FROM users");
+    strcpy(query, "SELECT id, name, loginflag FROM users");
 
     if (mysql_query(conn, query) != 0)
     {
@@ -454,8 +534,32 @@ char *showUsers()
     {
         for (int i = 0; i < num_fields; i++)
         {
-            strcat(tables, row[i]);
-            strcat(tables, " ");
+
+            if (i == 0)
+            {
+                strcat(tables, "(");
+                strcat(tables, row[0]);
+                strcat(tables, ")");
+                strcat(tables, " ");
+            }
+            else if (i == 1)
+            {
+                strcat(tables, row[1]);
+                strcat(tables, " ");
+                strcat(tables, "->");
+                strcat(tables, " ");
+            }
+            else if (i == 2)
+            {
+                if (atoi(row[2]) == 0)
+                {
+                    strcat(tables, "OFFLINE");
+                }
+                else
+                {
+                    strcat(tables, "ONLINE");
+                }
+            }
         }
         strcat(tables, "\n");
     }
@@ -669,6 +773,7 @@ char *getNameById(int id)
 
     int num_fields = mysql_num_fields(result);
     char *tables = malloc(1000 * sizeof(char *));
+    bzero(tables, strlen(tables));
 
     MYSQL_ROW row;
 
@@ -797,8 +902,10 @@ char *showMessageHistory(char buffer[], int idUser)
     MYSQL_ROW row;
 
     char *table = malloc(1000 * sizeof(char *));
-    bzero(table, sizeof(table));
+    bzero(table, strlen(table));
+
     strcat(table, "Istoric mesaje!\n");
+
     while ((row = mysql_fetch_row(result)))
     {
         strcat(table, "(MsgId:");
@@ -960,7 +1067,7 @@ char *offlineMessages(int id)
 
     char *table = malloc(1000 * sizeof(char *));
 
-    bzero(table, sizeof(table));
+    bzero(table, strlen(table));
 
     if (countOfflineMessages(id) == 0)
     {
@@ -1129,11 +1236,16 @@ void replyMessage(int desc, thData th, char buffer[], int idUser)
     int clientDesc;
     int idMessage = 0;
 
+    bzero(toSend, sizeof(toSend));
     bzero(nume, sizeof(nume));
 
     sscanf(buffer, "%s %s %i", comanda, nume, &idMessage);
 
     printf("%s\n", nume);
+
+    char nameIdUser[100] = "";
+
+    memcpy(nameIdUser, getNameById(idUser), strlen(getNameById(idUser)));
 
     if (verifyUser(nume) == 1 && verifyMessage(idMessage) == 1)
     {
@@ -1147,10 +1259,8 @@ void replyMessage(int desc, thData th, char buffer[], int idUser)
             // sprintf(toSend, "Mesaj de la %s: ", getNameById(th.idUser));
 
             // strcat(toSend, messageRead);
-            bzero(toSend, sizeof(toSend));
 
-            strcat(toSend, getNameById(idUser));
-            strcat(toSend, " ");
+            strcat(toSend, nameIdUser);
             strcat(toSend, "a dat reply la urmatorul mesaj:");
             strcat(toSend, " ");
             strcat(toSend, selectMessageFromDB(idMessage));
@@ -1191,6 +1301,72 @@ void replyMessage(int desc, thData th, char buffer[], int idUser)
     {
         strcpy(warning, "Nume sau id mesaj gresit!");
         write(desc, warning, strlen(warning));
+    }
+}
+
+void changeUsername(char buffer[], int idUser)
+{
+    MYSQL *conn = mysql_init(NULL);
+
+    if (conn == NULL)
+    {
+        fprintf(stderr, "%s\n", mysql_error(conn));
+        exit(1);
+    }
+
+    if (!mysql_real_connect(conn, MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE, 0, NULL, 0))
+    {
+        fprintf(stderr, "%s\n", mysql_error(conn));
+        mysql_close(conn);
+        exit(2);
+    }
+
+    char query[256];
+    char comanda[100];
+    char nume[100];
+
+    sscanf(buffer, "%s %s", comanda, nume);
+
+    sprintf(query, "UPDATE users SET name = '%s' WHERE id = %i", nume, idUser);
+
+    if (mysql_query(conn, query) != 0)
+    {
+        fprintf(stderr, "%s\n", mysql_error(conn));
+        exit(3);
+        mysql_close(conn);
+    }
+}
+
+void changePassword(char buffer[], int idUser)
+{
+    MYSQL *conn = mysql_init(NULL);
+
+    if (conn == NULL)
+    {
+        fprintf(stderr, "%s\n", mysql_error(conn));
+        exit(1);
+    }
+
+    if (!mysql_real_connect(conn, MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE, 0, NULL, 0))
+    {
+        fprintf(stderr, "%s\n", mysql_error(conn));
+        mysql_close(conn);
+        exit(2);
+    }
+
+    char query[256];
+    char comanda[100];
+    char parola[100];
+
+    sscanf(buffer, "%s %s", comanda, parola);
+
+    sprintf(query, "UPDATE users SET password = '%s' WHERE id = %i", parola, idUser);
+
+    if (mysql_query(conn, query) != 0)
+    {
+        fprintf(stderr, "%s\n", mysql_error(conn));
+        exit(3);
+        mysql_close(conn);
     }
 }
 
@@ -1288,6 +1464,16 @@ void response(void *arg)
             else if (strncmp(buffer, "reply", 5) == 0)
             {
                 replyMessage(tdL.thDesc, tdL, buffer, tdL.idUser);
+            }
+            else if (strncmp(buffer, "setnameto", 9) == 0)
+            {
+                changeUsername(buffer, tdL.idUser);
+                write(tdL.thDesc, "Ti-ai schimbat numele cu succes!", 32);
+            }
+            else if (strncmp(buffer, "setpassto", 9) == 0)
+            {
+                changePassword(buffer, tdL.idUser);
+                write(tdL.thDesc, "Ti-ai schimbat parola cu succes!", 32);
             }
         }
 
