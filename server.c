@@ -424,31 +424,18 @@ void Register(int desc, thData th)
     fflush(stdout);
 
     MYSQL *conn = mysql_init(NULL);
-    // MYSQL_RES *res;
-    // MYSQL_ROW row;
 
     char query[256];
     char username[100];
     char password[100];
     char userData[100];
     char *answer = (char *)malloc(50 * sizeof(char));
-    // int userLen = 0;
-    // int passLen = 0;
-
-    // bzero(username, sizeof(username));
-    // bzero(password, sizeof(password));
-    // bzero(answer, sizeof(answer));
 
     if (read(desc, &userData, sizeof(userData)) < 0)
     {
         perror("Eroare read username\n");
     }
-    // if (read(desc, &password, sizeof(password)) < 0)
-    // {
-    //     perror("Eroare read password\n");
-    // }
-    // username[userLen]='\0';
-    // password[passLen]='\0';
+
     sscanf(userData, "%s %s", username, password);
 
     printf("Name: %s\n", username);
@@ -1028,6 +1015,7 @@ int countOfflineMessages(int id)
 
 char *offlineMessages(int id)
 {
+    printf("Am intrat in offmess!\n");
     MYSQL *conn = mysql_init(NULL);
 
     if (conn == NULL)
@@ -1232,7 +1220,7 @@ void replyMessage(int desc, thData th, char buffer[], int idUser)
     char comanda[100] = "";
     char messageRead[500] = "";
     char warning[5000] = "";
-    char toSend[1000] = "";
+    char toSend[1000] = "";//reply nume id
     int clientDesc;
     int idMessage = 0;
 
